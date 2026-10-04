@@ -17,7 +17,7 @@ teardown() {
   wait_for "$c" "$PROMPT_MARK"
   old_tab=$(pane_field "$c" tab_id)
   close_pane "$c"
-  run ! h tab get "$old_tab" >/dev/null 2>&1
+  not_found tab "$old_tab"
 
   new=$(reopen_pane)
 
@@ -28,7 +28,7 @@ teardown() {
 @test "the last pane of a labeled workspace brings the workspace back with its label" {
   new_workspace uc-space
   close_pane "$ROOT_PANE"
-  run ! h workspace get "$TEST_WS" >/dev/null 2>&1
+  not_found workspace "$TEST_WS"
   TEST_WS=""
 
   new=$(reopen_pane)

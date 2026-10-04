@@ -19,10 +19,6 @@ wait_leader() {
   return 1
 }
 
-runs() {
-  h pane process-info --pane "$1" | jq -e --arg n "$2" 'any(.result.process_info.foreground_processes[]?; (.argv[0] // "" | split("/") | last) == $n)' >/dev/null
-}
-
 @test "a pane running tail -F '<dir>/a;b' reopens with that command typed, not run" {
   new_workspace
   b=$(split_pane "$ROOT_PANE" right)
@@ -35,7 +31,7 @@ runs() {
   wait_for "$new" "$REOPEN_MARK"
   line=$(wait_last_line "$new" "tail -F '$HOME/a;b'")
   [ "$line" = "$PROMPT_MARK tail -F '$HOME/a;b'" ]
-  run ! runs "$new" tail
+  not_running "$new" tail
 }
 
 @test "a command holding a control character is not typed back" {
@@ -45,6 +41,8 @@ runs() {
   h pane run "$b" "tail -F \$'$HOME/x\\001y'"
   wait_leader "$b" tail
   close_pane "$b"
+  # "Nothing typed" below is the guard's doing only if the saved argv really holds the ^A byte.
+  jq -e 'any(.argv[]?; test("[[:cntrl:]]"))' "$HERDR_PLUGIN_STATE_DIR"/closed/*/entry.json >/dev/null
 
   new=$(reopen_pane)
 

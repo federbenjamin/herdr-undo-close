@@ -29,9 +29,24 @@ live_setup_file() {
   bash "$REPO_ROOT/setup.sh" shell >/dev/null
 }
 
+# bats runs teardown_file with errexit off, so a stop_server failure is kept and returned once
+# unisolate has also run: a server still running at teardown fails the file.
 live_teardown_file() {
-  stop_server
-  unisolate
+  local rc=0
+  stop_server || rc=1
+  unisolate || rc=1
+  return "$rc"
+}
+
+# require_shell <name>: skips the test when the shell is missing, except on CI (CI is set), where
+# a skip would leave the check green with the case never run, so it fails instead.
+require_shell() {
+  command -v "$1" >/dev/null && return 0
+  if [ -n "${CI:-}" ]; then
+    echo "$1 is not installed; CI must run the $1 case" >&2
+    return 1
+  fi
+  skip "$1 is not installed"
 }
 
 # One closed-pane stack per test, so a failed test's entry never reopens in the next.
@@ -80,16 +95,42 @@ put_output() {
   h pane run "$1" 'echo "uc-out-$((40 + 2))"' >/dev/null && wait_for "$1" uc-out-42
 }
 
-# close_pane <pane>: close.sh, then wait until the pane is gone and its entry is on the stack.
+# not_found pane|tab|workspace <id>: herdr itself answers "<kind>_not_found" for the id. Any
+# other failure (a dead server, a guard refusal) is not "gone", so it fails here.
+not_found() {
+  local out
+  if out=$(h "$1" get "$2" 2>&1); then
+    echo "not_found: $1 $2 still exists" >&2
+    return 1
+  fi
+  printf '%s' "$out" | jq -e --arg c "$1_not_found" '.error.code == $c' >/dev/null 2>&1 || {
+    echo "not_found: $1 get $2 failed with something other than $1_not_found: $out" >&2
+    return 1
+  }
+}
+
+# not_running <pane> <name>: process-info answers for the pane, and no foreground process is
+# <name>. A failed or unparsed process-info call fails here instead of reading as "not running".
+not_running() {
+  local out
+  out=$(h pane process-info --pane "$1") || return 1
+  printf '%s' "$out" | jq -e --arg n "$2" '.result.process_info.foreground_processes
+    | type == "array" and (any(.[]; (.argv[0] // "" | split("/") | last) == $n) | not)' >/dev/null
+}
+
+# close_pane <pane>: close.sh on an open pane, then wait until herdr reports the pane not found
+# and its entry is on the stack.
 close_pane() {
+  h pane get "$1" >/dev/null || { echo "close_pane: $1 is not an open pane" >&2; return 1; }
   bash "$REPO_ROOT/close.sh" "$1" || return 1
   for _ in $(seq 1 60); do
-    if ! h pane get "$1" >/dev/null 2>&1 && compgen -G "$HERDR_PLUGIN_STATE_DIR/closed/*/entry.json" >/dev/null; then
+    if not_found pane "$1" 2>/dev/null && compgen -G "$HERDR_PLUGIN_STATE_DIR/closed/*/entry.json" >/dev/null; then
       return 0
     fi
     sleep 0.1
   done
-  echo "close_pane: $1 still open or no entry after 6s" >&2
+  not_found pane "$1" || true
+  echo "close_pane: $1 not reported gone, or no entry, after 6s" >&2
   return 1
 }
 
@@ -117,7 +158,13 @@ rect() {
   h pane layout --pane "$1" | jq -r --arg p "$1" --arg k "$2" '.result.layout.panes[] | select(.pane_id == $p) | .rect[$k]'
 }
 
-pane_field() { h pane get "$1" | jq -r ".result.pane.$2"; }
+# pane_field <pane> <field>: fails when the pane is not found or the field is null, so a later
+# "gone" check never runs on an empty id.
+pane_field() {
+  local out
+  out=$(h pane get "$1") || return 1
+  printf '%s' "$out" | jq -er ".result.pane.$2"
+}
 
 # last_line <pane>: the pane's last non-blank screen line, trailing spaces dropped.
 last_line() {

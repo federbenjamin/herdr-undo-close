@@ -47,7 +47,11 @@ def touches($a; $b; $d): if $d == "right"
     v: 1,
     pane_id: $p.pane_id, workspace_id: $p.workspace_id, tab_id: $p.tab_id,
     cwd: $cwd, label: ($p.label // null),
-    tab_label: ($t.label // null | if . != null and test("^[0-9]+ · ") then null else . end),
+    # herdr labels a never-renamed tab with its number ("1"); the auto-title plugin writes
+    # "N · name". Neither is a label the user set, so neither is restored.
+    tab_label: ($t.label // null
+      | if . != null and ((($t.number // null) != null and . == ($t.number | tostring)) or test("^[0-9]+ · "))
+        then null else . end),
     workspace_label: ($w.label // null | if . == ($cwd // "" | split("/") | last) then null else . end),
     sibling: $sib,
     agent: ($a.agent // null), session: ($a.session // null),

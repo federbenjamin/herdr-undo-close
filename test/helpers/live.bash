@@ -26,13 +26,17 @@ start_server() {
   esac
 }
 
-# Stops the server and waits until it is gone, so the test HOME can be removed.
+# Stops the server and waits until `status server` answers "not running", so the test HOME can be
+# removed. A failing `status` call is not an answer, so it never counts as stopped.
 stop_server() {
+  local out=""
   "$HERDR_BIN_PATH" server stop >/dev/null 2>&1 || true
   for _ in $(seq 1 40); do
-    "$HERDR_BIN_PATH" status server 2>/dev/null | grep -q '^status: running' || return 0
+    if out=$("$HERDR_BIN_PATH" status server 2>&1) && grep -qx 'status: not running' <<<"$out"; then
+      return 0
+    fi
     sleep 0.25
   done
-  echo "stop_server: herdr server still running" >&2
+  echo "stop_server: herdr server not confirmed stopped; status server said: $out" >&2
   return 1
 }

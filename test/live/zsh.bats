@@ -11,7 +11,7 @@ teardown_file() {
   live_teardown_file
 }
 setup() {
-  command -v zsh >/dev/null || skip "zsh is not installed"
+  require_shell zsh
   live_setup
 }
 teardown() { live_teardown; }
