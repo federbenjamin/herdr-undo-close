@@ -1,0 +1,23 @@
+# herdr-undo-close settings. Shell syntax, sourced by the scripts. Copy the lines you change to
+# the file `herdr plugin config-dir herdr-undo-close` prints, named `config`, and leave this
+# file as it is.
+
+# Arguments added to `claude --resume <session>` when a Claude Code pane is reopened.
+# Example: claude_resume_args="--permission-mode auto"
+claude_resume_args=""
+
+# Programs that take ctrl+d themselves (a shell's EOF, a REPL's exit, an agent's exit, a
+# pager's or editor's scroll): the close key is passed through to them. Any other program's
+# pane is closed by herdr. Matched against the process name.
+passthrough_regex='^(zsh|bash|fish|sh|dash|login|claude|codex|vim|nvim|vi|micro|nano|less|more|python[0-9.]*|ipython|node|deno|bun|irb|psql|mysql|sqlite3|ssh|cat)$'
+
+# Closed panes remembered (the stack `reopen` pops).
+keep=20
+
+# Days after which a remembered pane is forgotten even if never reopened. Snapshots hold the
+# pane's scrollback, so this bounds how long that text stays on disk.
+max_age_days=7
+
+# Minutes after an agent left its pane during which a close still reopens as that agent
+# (Claude Code exits on two ctrl+d; the shell under it goes on the next).
+agent_minutes=10

@@ -1,0 +1,54 @@
+id = "herdr-undo-close"
+name = "Undo Close"
+version = "0.2.0"
+min_herdr_version = "0.9.0"
+description = "One key closes the focused pane the right way and remembers it; another reopens the last closed pane in its old spot, scrollback and agent session included"
+platforms = ["macos", "linux"]
+
+# Nothing to build; fails the install with a clear message when jq is missing.
+[[build]]
+platforms = ["macos", "linux"]
+command = ["/bin/sh", "scripts/check-deps.sh"]
+
+[[actions]]
+id = "close"
+title = "Close pane (smart ctrl+d)"
+description = "EOF to a shell or agent, which exit themselves; pane close for anything else. Snapshots the pane first."
+contexts = ["pane"]
+command = ["bash", "close.sh"]
+
+[[actions]]
+id = "reopen"
+title = "Reopen last closed pane"
+description = "The newest closed pane comes back in its old spot with its scrollback; a Claude pane resumes its session."
+contexts = ["pane", "workspace", "global"]
+command = ["bash", "reopen.sh"]
+
+# Plugins cannot ship keys or shell lines; these actions write them as marker-fenced blocks.
+[[actions]]
+id = "setup-keys"
+title = "undo-close: install the default keys"
+description = "ctrl+d → close, prefix+u → reopen, as one block in your herdr config (backed up first). A key already bound elsewhere is left alone."
+contexts = ["workspace", "global"]
+command = ["bash", "setup.sh", "keys"]
+
+[[actions]]
+id = "setup-shell"
+title = "undo-close: install the shell hook"
+description = "The hook that replays a reopened pane, as one block at the end of your login profile (~/.bash_profile or ~/.zprofile, backed up first)."
+contexts = ["workspace", "global"]
+command = ["bash", "setup.sh", "shell"]
+
+[[actions]]
+id = "remove-keys"
+title = "undo-close: remove the default keys"
+description = "Delete the block setup-keys wrote."
+contexts = ["workspace", "global"]
+command = ["bash", "setup.sh", "remove-keys"]
+
+[[actions]]
+id = "remove-shell"
+title = "undo-close: remove the shell hook"
+description = "Delete the block setup-shell wrote."
+contexts = ["workspace", "global"]
+command = ["bash", "setup.sh", "remove-shell"]
