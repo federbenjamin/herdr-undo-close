@@ -22,8 +22,11 @@ live_setup_file() {
   printf '[terminal]\ndefault_shell = "%s"\nshell_mode = "login"\n' "$shell_bin" > "$HOME/.config/herdr/config.toml"
   case "$1" in
     bash) printf "PS1='%s '\n" "$PROMPT_MARK" > "$HOME/.bash_profile" ;;
-    # .zshrc: macOS /etc/zshrc runs after .zprofile and would reset PS1.
-    zsh) printf "PS1='%s '\n" "$PROMPT_MARK" > "$HOME/.zshrc" ;;
+    # .zshrc: macOS /etc/zshrc runs after .zprofile and would reset PS1. .zshenv: Ubuntu's
+    # /etc/zsh/zshrc runs compinit, which stops at an "insecure directories" prompt on CI runners.
+    zsh)
+      printf "PS1='%s '\n" "$PROMPT_MARK" > "$HOME/.zshrc"
+      printf 'skip_global_compinit=1\n' > "$HOME/.zshenv" ;;
   esac
   start_server || return 1
   bash "$REPO_ROOT/setup.sh" shell >/dev/null
