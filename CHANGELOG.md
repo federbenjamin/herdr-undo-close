@@ -3,8 +3,8 @@
 ## Unreleased
 
 - A file viewer reopens at the file it showed when it closed, read from the viewer's
-  `file_viewer_open` pane token. A viewer that does not report it reopens at the file it was
-  launched with, as before.
+  `file_viewer_open` pane token (the viewer's `report_open_file = true`). A viewer that does not
+  report it reopens at the file it was launched with, as before.
 
 ## 0.2.1 — 2026-10-04
 
