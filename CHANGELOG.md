@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A file viewer reopens at the file it showed when it closed, read from the viewer's
+  `file_viewer_open` pane token. A viewer that does not report it reopens at the file it was
+  launched with, as before.
+
 ## 0.2.1 — 2026-10-04
 
 - A test suite on bats-core: unit tests for `entry.jq`, `reopen_entry.sh` and `setup.sh` against

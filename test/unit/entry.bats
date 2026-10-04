@@ -101,6 +101,21 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
   [ "$(jq -r '.viewer_open' <<<"$output")" = /home/user/proj/sub/notes.md ]
 }
 
+@test "viewer_open prefers the file the viewer reports now (pane token file_viewer_open) over --open" {
+  d=$(copy_fx viewer)
+  jq '.result.pane.tokens = {"file_viewer_open": "docs/now.md"}' "$d/pane.json" > "$d/p" && mv "$d/p" "$d/pane.json"
+  run build_entry "$d"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.viewer_open' <<<"$output")" = docs/now.md ]
+}
+
+@test "a file_viewer_open token on a pane that is not a viewer is ignored" {
+  d=$(copy_fx lone)
+  jq '.result.pane.tokens = {"file_viewer_open": "docs/now.md"}' "$d/pane.json" > "$d/p" && mv "$d/p" "$d/pane.json"
+  run build_entry "$d"
+  [ "$(jq -c '.viewer_open' <<<"$output")" = null ]
+}
+
 @test "viewer_open is null for a pane that is not a viewer" {
   run build_entry "$(fx lone)"
   [ "$(jq -c '.viewer_open' <<<"$output")" = null ]
