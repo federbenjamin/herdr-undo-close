@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# HERDR_BIN_PATH for the tests. Refuses any herdr call that could reach a herdr other than the
+# test's own, then runs the real herdr. Set up by `isolate` (common.bash): HOME must be the test
+# HOME, HERDR_SESSION unset, and every HERDR_* / XDG_* value that is a path must sit under it.
+set -u
+call="herdr $*"
+refuse() {
+  echo "herdr-guard: refused '$call': $1" >&2
+  [ -d "${UNDO_CLOSE_TEST_HOME:-}" ] && echo "$call: $1" >> "$UNDO_CLOSE_TEST_HOME/guard-refusals"
+  exit 97
+}
+h=${UNDO_CLOSE_TEST_HOME:-}
+[ -n "$h" ] && [ -d "$h" ] || refuse "no test HOME (call isolate first)"
+[ "${HOME:-}" = "$h" ] || refuse "HOME is ${HOME:-unset}, not the test HOME"
+[ -z "${HERDR_SESSION:-}" ] || refuse "HERDR_SESSION is set"
+for v in $(compgen -e); do
+  case "$v" in HERDR_BIN_PATH) continue ;; HERDR_*|XDG_*) ;; *) continue ;; esac
+  case "${!v}" in /*) ;; *) continue ;; esac
+  case "${!v}" in "$h" | "$h"/*) ;; *) refuse "$v points outside the test HOME" ;; esac
+done
+[ -n "${UNDO_CLOSE_REAL_HERDR:-}" ] || refuse "herdr is not installed"
+exec "$UNDO_CLOSE_REAL_HERDR" "$@"
