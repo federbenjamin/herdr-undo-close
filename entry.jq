@@ -1,8 +1,5 @@
 # Builds one flat entry (the snapshot contract reopen.sh reads) from the raw herdr replies
-# remember.sh saved. Run as:
-#   jq -n -f entry.jq --slurpfile pane pane.json --slurpfile layout layout.json \
-#      --slurpfile procs procs.json --slurpfile tab tab.json --slurpfile ws workspace.json \
-#      --slurpfile agent agent.json        (agent.json may be an empty file)
+# remember.sh saved. Run it through build_entry.sh <dir>, which holds the jq command.
 # Every field is present; absent data is null. `v` is the contract version.
 
 def first_or_null: if length > 0 then .[0] else null end;

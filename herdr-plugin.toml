@@ -1,6 +1,6 @@
 id = "herdr-undo-close"
 name = "Undo Close"
-version = "0.2.0"
+version = "0.2.1"
 min_herdr_version = "0.9.0"
 description = "One key closes the focused pane the right way and remembers it; another reopens the last closed pane in its old spot, scrollback and agent session included"
 platforms = ["macos", "linux"]
