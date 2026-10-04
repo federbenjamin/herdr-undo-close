@@ -3,15 +3,9 @@ load ../helpers/common
 setup() { isolate; }
 teardown() { unisolate; }
 
-# build_entry <dir> prints entry.jq's result for the replies in <dir>; the same command as
-# remember.sh's promote. <dir>/agent.json is optional (an empty file stands in for none).
-build_entry() {
-  local d=$1 agent=$1/agent.json
-  [ -e "$agent" ] || { agent=$BATS_TEST_TMPDIR/no-agent.json; : > "$agent"; }
-  jq -n -f "$REPO_ROOT/entry.jq" --slurpfile pane "$d/pane.json" --slurpfile layout "$d/layout.json" \
-    --slurpfile procs "$d/procs.json" --slurpfile tab "$d/tab.json" --slurpfile ws "$d/workspace.json" \
-    --slurpfile agent "$agent"
-}
+# build_entry <dir> prints entry.jq's result for the replies in <dir>, through the same
+# build_entry.sh remember.sh's promote runs.
+build_entry() { bash "$REPO_ROOT/build_entry.sh" "$1"; }
 
 fx() { echo "$REPO_ROOT/test/fixtures/$1"; }
 pane_of() { jq -r '.result.pane.pane_id' "$(fx "$1")/pane.json"; }

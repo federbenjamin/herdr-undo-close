@@ -48,10 +48,7 @@ case "$cmd" in
       # Gone means herdr says so (its error JSON goes to stderr); any other error is not a close.
       [ "$("$herdr" pane get "$pane" 2>&1 >/dev/null | jq -r '.error.code // empty' 2>/dev/null)" = pane_not_found ] || continue
       if [ ! -s "$dir/pane.json" ] || [ ! -s "$dir/layout.json" ]; then rm -rf "$dir"; exit 0; fi
-      [ -e "$dir/agent.json" ] || : > "$dir/agent.json"
-      if ! jq -n -f "$here/entry.jq" --slurpfile pane "$dir/pane.json" --slurpfile layout "$dir/layout.json" \
-           --slurpfile procs "$dir/procs.json" --slurpfile tab "$dir/tab.json" --slurpfile ws "$dir/workspace.json" \
-           --slurpfile agent "$dir/agent.json" > "$dir/entry.json" 2>/dev/null; then
+      if ! bash "$here/build_entry.sh" "$dir" > "$dir/entry.json" 2>/dev/null; then
         rm -rf "$dir"; exit 0
       fi
       # Entries sort by a counter, so two closes in one second keep their order.
