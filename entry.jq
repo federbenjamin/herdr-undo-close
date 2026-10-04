@@ -55,5 +55,8 @@ def touches($a; $b; $d): if $d == "right"
     kind: (if $viewer != null then "viewer" elif ($a.session // null) != null then "agent" else "shell" end),
     programs: $names,
     argv: (if $leader != null and (($leader | pname) | test("^(zsh|bash|fish|sh|dash|login)$") | not) then $leader.argv else null end),
-    viewer_open: (if $viewer == null then null else ($viewer.argv | index("--open") as $i | if $i then .[$i + 1] // null else null end) end)
+    # The file a viewer pane shows now (herdr-file-viewer reports it as the pane token
+    # file_viewer_open, root-relative), else the file it was launched with (--open).
+    viewer_open: (if $viewer == null then null
+      else ($p.tokens.file_viewer_open // null) // ($viewer.argv | index("--open") as $i | if $i then .[$i + 1] // null else null end) end)
   }
