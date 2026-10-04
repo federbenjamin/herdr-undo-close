@@ -47,7 +47,7 @@ case "$cmd" in
       sleep 0.2
       # Gone means herdr says so (its error JSON goes to stderr); any other error is not a close.
       [ "$("$herdr" pane get "$pane" 2>&1 >/dev/null | jq -r '.error.code // empty' 2>/dev/null)" = pane_not_found ] || continue
-      [ -s "$dir/pane.json" ] && [ -s "$dir/layout.json" ] || { rm -rf "$dir"; exit 0; }
+      if [ ! -s "$dir/pane.json" ] || [ ! -s "$dir/layout.json" ]; then rm -rf "$dir"; exit 0; fi
       [ -e "$dir/agent.json" ] || : > "$dir/agent.json"
       if ! jq -n -f "$here/entry.jq" --slurpfile pane "$dir/pane.json" --slurpfile layout "$dir/layout.json" \
            --slurpfile procs "$dir/procs.json" --slurpfile tab "$dir/tab.json" --slurpfile ws "$dir/workspace.json" \

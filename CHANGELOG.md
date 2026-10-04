@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- A test suite on bats-core: unit tests for `entry.jq`, `reopen_entry.sh` and `setup.sh` against
+  saved Herdr replies, and live tests that close and reopen panes on a real headless Herdr. Every
+  Herdr call goes through a guard, so the tests never reach your own Herdr.
+- CI on GitHub Actions: shellcheck and both test layers on Ubuntu and macOS.
+- Fix: a reopened tab no longer keeps Herdr's own default label (the tab's number, "1") as a
+  custom label; only a label you set is restored.
+
 ## 0.2.0 — 2026-10-03
 
 First shareable version.

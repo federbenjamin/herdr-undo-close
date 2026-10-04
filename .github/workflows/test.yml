@@ -1,0 +1,54 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq, bats-core, shellcheck, zsh (ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq bats shellcheck zsh
+
+      - name: Install jq, bats-core, shellcheck (macos)
+        if: runner.os == 'macOS'
+        run: brew install jq bats-core shellcheck
+
+      - name: Install herdr
+        run: |
+          curl -fsSL https://herdr.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Versions
+        run: |
+          herdr --version
+          bats --version
+          jq --version
+          shellcheck --version
+
+      # lib.sh and shell-hook.sh are sourced and have no shebang, hence -s bash;
+      # scripts/check-deps.sh is /bin/sh and is checked as such.
+      - name: shellcheck
+        run: |
+          shellcheck -x scripts/check-deps.sh
+          shellcheck -x -s bash ./*.sh test/helpers/herdr-guard test/helpers/*.bash test/live/*.bash test/fixtures/*.sh
+
+      # Each check runs even when an earlier one failed, so one red step never hides another.
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: bats test/unit
+
+      - name: Live tests
+        if: ${{ !cancelled() }}
+        run: bats test/live
