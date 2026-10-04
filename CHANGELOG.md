@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A test suite on bats-core: unit tests for `entry.jq`, `reopen_entry.sh` and `setup.sh` against
+  saved Herdr replies, and live tests that close and reopen panes on a real headless Herdr. Every
+  Herdr call goes through a guard, so the tests never reach your own Herdr.
+- CI on GitHub Actions: shellcheck and both test layers on Ubuntu and macOS.
+
 ## 0.2.0 — 2026-10-03
 
 First shareable version.
