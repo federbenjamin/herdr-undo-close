@@ -16,7 +16,7 @@
 
 f() { jq -r "$1 // empty" "$entry/entry.json" 2>/dev/null || true; }
 entry="" new=""
-restore() { [ -z "$new" ] && [ -n "$entry" ] && [ -d "$entry" ] && mv "$entry" "$state/closed/" 2>/dev/null || true; }
+restore() { if [ -z "$new" ] && [ -n "$entry" ] && [ -d "$entry" ]; then mv "$entry" "$state/closed/" 2>/dev/null || true; fi; }
 trap restore EXIT
 
 # Pop the newest readable entry.

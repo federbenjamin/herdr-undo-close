@@ -10,7 +10,7 @@ refuse() {
   exit 97
 }
 h=${UNDO_CLOSE_TEST_HOME:-}
-[ -n "$h" ] && [ -d "$h" ] || refuse "no test HOME (call isolate first)"
+if [ -z "$h" ] || [ ! -d "$h" ]; then refuse "no test HOME (call isolate first)"; fi
 [ "${HOME:-}" = "$h" ] || refuse "HOME is ${HOME:-unset}, not the test HOME"
 [ -z "${HERDR_SESSION:-}" ] || refuse "HERDR_SESSION is set"
 for v in $(compgen -e); do
