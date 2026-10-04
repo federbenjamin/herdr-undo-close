@@ -59,7 +59,8 @@ remembered.
 - Closing a popup needs `python3`; without it the key goes to the pane under the popup.
 - A [herdr-file-viewer](https://github.com/smarzban/herdr-file-viewer) pane reopens beside the
   pane it was opened from, at the file it showed when the viewer reports it (its
-  `file_viewer_open` pane token), else at the file it was launched with.
+  `file_viewer_open` pane token; set `report_open_file = true` in the viewer's config), else at
+  the file it was launched with.
 - Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
   `herdr plugin uninstall herdr-undo-close`.
 
