@@ -1,0 +1,1 @@
+{"id":"cli:pane:get","result":{"pane":{"agent_status":"unknown","cwd":"/home/user/plugins/overlay","focused":true,"foreground_cwd":"/home/user/plugins/overlay","label":"view","pane_id":"w8:p2","revision":0,"scroll":{"max_offset_from_bottom":0,"offset_from_bottom":0,"viewport_rows":40},"tab_id":"w8:t1","terminal_id":"term_65d1d8cd35bebf","workspace_id":"w8"},"type":"pane_info"}}

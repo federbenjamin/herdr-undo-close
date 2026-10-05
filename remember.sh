@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The memory half. close.sh calls `snapshot` before every close key and `promote` after it.
 #
-#   remember.sh snapshot <pane>   staging/<pane>/: the raw herdr replies (pane, layout, procs,
-#                                 tab, workspace), agent.json while the pane holds an agent
+#   remember.sh snapshot <pane>   staging/<pane>/: the raw herdr replies (pane, layout, plugin,
+#                                 procs, tab, workspace), agent.json while the pane holds an agent
 #                                 (kept $agent_minutes after it leaves: Claude Code exits on
 #                                 two ctrl+d, the shell on the next), and the scrollback.
 #                                 Also forgets anything older than $max_age_days.
@@ -32,6 +32,21 @@ case "$cmd" in
       rm -f "$dir/agent.json"   # the agent left long ago; this is a plain shell close now
     fi
     save "$dir/layout.json" pane layout --pane "$pane" || true
+    # The one API that names a pane's plugin; it also focuses the pane, so the layout is saved first.
+    # {} only on herdr's own "no plugin owns it"; any other failure leaves no plugin.json (the entry
+    # falls back to a shell) and says so on stdout, which close.sh leaves to `herdr plugin log`.
+    if err=$("$herdr" plugin pane focus "$pane" 2>&1 > "$dir/plugin.json.tmp"); then
+      mv "$dir/plugin.json.tmp" "$dir/plugin.json"
+    else
+      rm -f "$dir/plugin.json.tmp" "$dir/plugin.json"
+      code=$(printf '%s' "$err" | jq -r '.error.code // empty' 2>/dev/null || true)
+      if [ "$code" = plugin_pane_not_found ]; then
+        echo '{}' > "$dir/plugin.json"
+      else
+        valid_id "$code" || code="no error code"
+        echo "remember: plugin pane focus $pane failed ($code); not recorded as a plugin pane"
+      fi
+    fi
     save "$dir/procs.json" pane process-info --pane "$pane" || echo '{}' > "$dir/procs.json"
     save "$dir/tab.json" tab get "$(jq -r '.result.pane.tab_id' "$dir/pane.json")" || echo '{}' > "$dir/tab.json"
     save "$dir/workspace.json" workspace get "$(jq -r '.result.pane.workspace_id' "$dir/pane.json")" || echo '{}' > "$dir/workspace.json"

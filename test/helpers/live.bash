@@ -40,3 +40,24 @@ stop_server() {
   echo "stop_server: herdr server not confirmed stopped; status server said: $out" >&2
   return 1
 }
+
+# link_plugin <dir> <plugin id> <pane id> <placement> <command toml array> writes a one-pane
+# manifest into <dir> and links it as a local plugin of the test server.
+link_plugin() {
+  local dir=$1 id=$2 pane=$3 placement=$4 command=$5
+  mkdir -p "$dir" || return 1
+  cat > "$dir/herdr-plugin.toml" <<TOML || return 1
+id = "$id"
+name = "$id"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["macos", "linux"]
+
+[[panes]]
+id = "$pane"
+title = "$pane"
+placement = "$placement"
+command = $command
+TOML
+  "$HERDR_BIN_PATH" plugin link "$dir"
+}

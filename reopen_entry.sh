@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs inside a reopened pane's shell, before its first prompt (the setup-shell hook sees
 # UNDO_CLOSE_REOPEN=<entry dir>): replay the closed pane's scrollback, delete the entry, then
-# resume its agent. Needs no PATH and no herdr: reopen.sh wrote every path into <entry>/launch.
+# resume its agent, or start a fresh claude when its session has no conversation file. Needs no
+# PATH and no herdr: reopen.sh wrote every path into <entry>/launch.
 set -u
 entry=${1:?usage: reopen_entry.sh <entry dir>}
 [ -d "$entry" ] || exit 0
@@ -15,16 +16,23 @@ agent="" session="" claude_bin="" claude_resume_args=""
 [ -f "$entry/launch" ] && . "$entry/launch"
 rm -rf "$entry"
 
+note() { printf '\033[2mundo-close: %s\033[0m\n' "$1"; }
+
 case "$agent" in
   "") ;;
   claude)
     if [ -z "$claude_bin" ]; then
-      printf '\033[2mundo-close: claude is not on PATH; the session %s was not resumed.\033[0m\n' "$session"
+      note "claude is not on PATH; the session $session was not resumed."
     elif ! printf '%s' "$session" | grep -Eq '^[A-Za-z0-9-]+$'; then
-      printf '\033[2mundo-close: refusing to resume an odd-looking session id.\033[0m\n'
-    else
+      note "refusing to resume an odd-looking session id."
+    # Claude Code's --resume finds a session under any project folder, so any one is a hit.
+    elif compgen -G "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/*/$session.jsonl" >/dev/null; then
       # shellcheck disable=SC2086
       "$claude_bin" $claude_resume_args --resume="$session"
+    else
+      note "claude session $session was never saved (no conversation file); starting a fresh claude here."
+      # shellcheck disable=SC2086
+      "$claude_bin" $claude_resume_args
     fi ;;
-  *) printf '\033[2mundo-close: no resume for %s; its scrollback is above.\033[0m\n' "$agent" ;;
+  *) note "no resume for $agent; its scrollback is above." ;;
 esac

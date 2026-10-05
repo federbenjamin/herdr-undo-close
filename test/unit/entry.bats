@@ -94,15 +94,16 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
   [ "$(jq -r '.session' <<<"$output")" = abc-123 ]
 }
 
-@test "a file viewer in the foreground: kind viewer, viewer_open is the --open path" {
-  run build_entry "$(fx viewer)"
+@test "a file viewer plugin pane: kind plugin, the plugin herdr names, viewer_open is the --open path" {
+  run build_entry "$(fx plugin-split)"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.kind' <<<"$output")" = viewer ]
+  [ "$(jq -r '.kind' <<<"$output")" = plugin ]
+  [ "$(jq -c '.plugin' <<<"$output")" = '{"id":"herdr-file-viewer","entrypoint":"file-viewer","placement":"tiled"}' ]
   [ "$(jq -r '.viewer_open' <<<"$output")" = /home/user/proj/sub/notes.md ]
 }
 
 @test "viewer_open prefers the file the viewer reports now (pane token file_viewer_open) over --open" {
-  d=$(copy_fx viewer)
+  d=$(copy_fx plugin-split)
   jq '.result.pane.tokens = {"file_viewer_open": "docs/now.md"}' "$d/pane.json" > "$d/p" && mv "$d/p" "$d/pane.json"
   run build_entry "$d"
   [ "$status" -eq 0 ]
@@ -121,10 +122,10 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
   [ "$(jq -c '.viewer_open' <<<"$output")" = null ]
 }
 
-@test "the contract version is 1 and the ids and cwd come from the pane reply" {
+@test "the contract version is 2 and the ids and cwd come from the pane reply" {
   run build_entry "$(fx lone)"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.v' <<<"$output")" = 1 ]
+  [ "$(jq -r '.v' <<<"$output")" = 2 ]
   [ "$(jq -r '.pane_id' <<<"$output")" = "$(pane_of lone)" ]
   [ "$(jq -r '.cwd' <<<"$output")" = /home/user/proj ]
 }

@@ -52,6 +52,8 @@ launch() {
 }
 
 @test "claude gets the resume args words, then --resume=<session>" {
+  mkdir -p "$HOME/.claude/projects/-home-user-proj"
+  : > "$HOME/.claude/projects/-home-user-proj/abc-123.jsonl"
   launch claude abc-123 "$HOME/bin/claude" "--foo --bar=baz"
   run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
@@ -60,6 +62,8 @@ launch() {
 }
 
 @test "claude with no resume args gets only --resume=<session>" {
+  mkdir -p "$HOME/.claude/projects/-home-user-proj"
+  : > "$HOME/.claude/projects/-home-user-proj/abc-123.jsonl"
   launch claude abc-123 "$HOME/bin/claude" ""
   run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]

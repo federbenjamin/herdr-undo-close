@@ -15,6 +15,7 @@ def touches($a; $b; $d): if $d == "right"
 | ($tab | first_or_null | .result.tab) as $t
 | ($ws | first_or_null | .result.workspace) as $w
 | ($agent | first_or_null) as $a
+| ($plugin | first_or_null | .result.plugin_pane) as $pp
 | ($p.foreground_cwd // $p.cwd) as $cwd
 # The sibling: the other pane of the smallest split that held this pane, preferring one that
 # touched it along the split axis. side "after" = this pane was right of / below the sibling.
@@ -39,9 +40,8 @@ def touches($a; $b; $d): if $d == "right"
 | def pname: (.argv0 // .argv[0] | split("/") | last | ltrimstr("-"));
   ([$fg[] | pname]) as $names
 | ([$fg[] | select(.pid == $pi.foreground_process_group_id and .pid != $pi.shell_pid)] | first) as $leader
-| ([$fg[] | select(pname == "herdr-file-viewer")] | first) as $viewer
 | {
-    v: 1,
+    v: 2,
     pane_id: $p.pane_id, workspace_id: $p.workspace_id, tab_id: $p.tab_id,
     cwd: $cwd, label: ($p.label // null),
     # herdr labels a never-renamed tab with its number ("1"); the auto-title plugin writes
@@ -52,11 +52,19 @@ def touches($a; $b; $d): if $d == "right"
     workspace_label: ($w.label // null | if . == ($cwd // "" | split("/") | last) then null else . end),
     sibling: $sib,
     agent: ($a.agent // null), session: ($a.session // null),
-    kind: (if $viewer != null then "viewer" elif ($a.session // null) != null then "agent" else "shell" end),
+    # A plugin pane open over the pane it covers is the zoomed, focused one ("tiled" is herdr's
+    # word for split and tab panes).
+    plugin: (if $pp == null then null else
+      { id: $pp.plugin_id, entrypoint: $pp.entrypoint,
+        placement: (if ($l.zoomed // false) and $l.focused_pane_id == $p.pane_id then "overlay" else "tiled" end) } end),
+    kind: (if $pp != null then "plugin" elif ($a.session // null) != null then "agent" else "shell" end),
     programs: $names,
     argv: (if $leader != null and (($leader | pname) | test("^(zsh|bash|fish|sh|dash|login)$") | not) then $leader.argv else null end),
     # The file a viewer pane shows now (herdr-file-viewer reports it as the pane token
-    # file_viewer_open, root-relative), else the file it was launched with (--open).
-    viewer_open: (if $viewer == null then null
-      else ($p.tokens.file_viewer_open // null) // ($viewer.argv | index("--open") as $i | if $i then .[$i + 1] // null else null end) end)
+    # file_viewer_open, root-relative), else the file it was launched with (--open on the
+    # pane's own command, which a plugin pane runs as shell_pid).
+    viewer_open: (if $pp.plugin_id != "herdr-file-viewer" then null
+      else ($p.tokens.file_viewer_open // null)
+        // ([$pi.foreground_processes[]? | select(.pid == $pi.shell_pid)] | first | .argv // []
+            | index("--open") as $i | if $i then .[$i + 1] // null else null end) end)
   }

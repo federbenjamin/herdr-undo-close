@@ -1,1 +1,1 @@
-{"id":"cli:pane:process_info","result":{"process_info":{"foreground_process_group_id":86949,"foreground_processes":[{"argv":["-bash"],"argv0":"bash","cmdline":"-bash","cwd":"/home/user/proj","name":"bash","pid":86949}],"pane_id":"w3:p2","shell_pid":86949},"type":"pane_process_info"}}
+{"id":"cli:pane:process_info","result":{"process_info":{"foreground_process_group_id":93185,"foreground_processes":[{"argv":["-bash"],"argv0":"bash","cmdline":"-bash","cwd":"/home/user/proj","name":"bash","pid":93185}],"pane_id":"w3:p2","shell_pid":93185},"type":"pane_process_info"}}
