@@ -101,8 +101,9 @@ case "$kind" in
     if [ -z "$new" ]; then
       if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
         # The workspace stays, so the entry now names it: the next press opens there, making none.
-        jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new" \
-          && mv "$entry/entry.json.new" "$entry/entry.json" || true
+        if jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new"; then
+          mv "$entry/entry.json.new" "$entry/entry.json" || true
+        fi
       fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
