@@ -99,7 +99,11 @@ case "$kind" in
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
     new=$("$herdr" "${args[@]}" 2>"$entry/open-error" | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
     if [ -z "$new" ]; then
-      [ -z "$made_ws" ] || "$herdr" workspace close "$made_ws" >/dev/null 2>&1 || true
+      if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
+        # The workspace stays, so the entry now names it: the next press opens there, making none.
+        jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new" \
+          && mv "$entry/entry.json.new" "$entry/entry.json" || true
+      fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
       code=$(jq -r '.error.code // empty' "$entry/open-error" 2>/dev/null || true)

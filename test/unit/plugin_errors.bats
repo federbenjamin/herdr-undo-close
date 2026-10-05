@@ -152,3 +152,26 @@ gone_workspace() {
   [ "$(grep -c '^workspace close w9$' "$HOME/fake/calls")" -eq 1 ]
   [ -z "$(stack)" ]
 }
+
+@test "a workspace reopen made and could not close hosts the next press, which makes none" {
+  stack_plugin 1 acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is back on the stack."* ]]
+
+  reply workspace_get_w9 0 '{"result":{"workspace":{"workspace_id":"w9"}}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is back on the stack."* ]]
+  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(grep -c '^plugin pane open .*--placement tab --workspace w9' "$HOME/fake/calls")" -eq 2 ]
+
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w9:p2"}}}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
+  [ -z "$(stack)" ]
+}
