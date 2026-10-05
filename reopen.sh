@@ -81,7 +81,7 @@ fi
 
 case "$kind" in
   plugin)
-    id=$(f .plugin.id)
+    id=$(f .plugin.id) made_ws=""
     args=(plugin pane open --plugin "$id" --entrypoint "$(f .plugin.entrypoint)" --focus)
     case "$place" in
       overlay) args+=(--placement overlay) ;;
@@ -92,12 +92,14 @@ case "$kind" in
         ws_args=(--cwd "$cwd" --no-focus); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
         ws=$("$herdr" workspace create "${ws_args[@]}" 2>/dev/null | jq -r '.result.workspace.workspace_id // empty' || true)
         [ -n "$ws" ] || fail "Reopen" "Could not recreate the workspace for the $id pane; it is back on the stack."
+        made_ws=$ws
         args+=(--placement tab --workspace "$ws") ;;
     esac
     open=$(f .viewer_open)
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
     new=$("$herdr" "${args[@]}" 2>"$entry/open-error" | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
     if [ -z "$new" ]; then
+      [ -z "$made_ws" ] || "$herdr" workspace close "$made_ws" >/dev/null 2>&1 || true
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
       code=$(jq -r '.error.code // empty' "$entry/open-error" 2>/dev/null || true)
