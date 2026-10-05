@@ -2,7 +2,7 @@
 # Regenerates test/fixtures/ from a real herdr, started headless under a throwaway HOME made by
 # `isolate` (every herdr call goes through test/helpers/herdr-guard). Run it when herdr changes
 # a reply shape:  bash test/fixtures/capture.sh
-# Each fixture dir holds the five replies entry.jq reads, saved by the plugin's own
+# Each fixture dir holds the six replies entry.jq reads, saved by the plugin's own
 # `remember.sh snapshot`, with the throwaway HOME replaced by /home/user.
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=../helpers/common.bash
@@ -25,11 +25,9 @@ new_ws() {
 }
 split() { herdr pane split "$1" --direction "$2" | jq -r '.result.pane.pane_id'; }
 
-# run_in <pane> <marker> <command...> runs the command and waits until herdr shows marker in a
-# foreground process argv.
-run_in() {
-  local pane=$1 marker=$2; shift 2
-  herdr pane run "$pane" "$@" >/dev/null
+# wait_fg <pane> <marker> waits until herdr shows marker in a foreground process argv of pane.
+wait_fg() {
+  local pane=$1 marker=$2
   for _ in $(seq 1 40); do
     herdr pane process-info --pane "$pane" | jq -e --arg m "$marker" \
       '[.result.process_info.foreground_processes[]?.argv | join(" ")] | any(contains($m))' >/dev/null && return 0
@@ -39,13 +37,16 @@ run_in() {
   return 1
 }
 
+# run_in <pane> <marker> <command...> runs the command and waits for marker (wait_fg).
+run_in() { herdr pane run "$1" "${@:3}" >/dev/null; wait_fg "$1" "$2"; }
+
 # snap <name> <pane> saves the pane's replies as test/fixtures/<name>/.
 snap() {
   local name=$1 pane=$2 d="$out/$1" f
   export HERDR_PLUGIN_STATE_DIR="$HOME/state/$name"
   bash "$REPO_ROOT/remember.sh" snapshot "$pane"
   mkdir -p "$d"
-  for f in pane layout procs tab workspace; do
+  for f in pane layout procs tab workspace plugin; do
     sed -e "s|$(cd -P "$HOME" && pwd)|/home/user|g" -e "s|$HOME|/home/user|g" \
       "$HERDR_PLUGIN_STATE_DIR/staging/$pane/$f.json" > "$d/$f.json"
   done
@@ -80,9 +81,22 @@ read -r p1 tab _ <<<"$(new_ws "My workspace")"
 herdr tab rename "$tab" "My tab" >/dev/null
 snap labeled "$p1"
 
-# A pane whose foreground is a process named herdr-file-viewer, as the file-viewer plugin runs it.
+# Two plugin panes from local plugins: a file viewer split off a shell, launched with --open,
+# and an overlay over a focused shell.
+link_plugin "$HOME/plugins/viewer" herdr-file-viewer file-viewer split \
+  "[\"bash\", \"-c\", \"sleep 1000; :\", \"herdr-file-viewer\", \"--open\", \"$HOME/proj/sub/notes.md\"]" >/dev/null
+link_plugin "$HOME/plugins/overlay" test.overlay view overlay '["sleep", "1000"]' >/dev/null
+
 read -r p1 _ _ <<<"$(new_ws "")"
-run_in "$p1" "--open" exec -a herdr-file-viewer bash -c "'sleep 1000; :'" --open "$HOME/proj/sub/notes.md"
-snap viewer "$p1"
+p2=$(herdr plugin pane open --plugin herdr-file-viewer --entrypoint file-viewer --placement split \
+  --target-pane "$p1" --direction right --no-focus | jq -r '.result.plugin_pane.pane.pane_id')
+wait_fg "$p2" "--open"
+snap plugin-split "$p2"
+
+p1=$(herdr workspace create --cwd "$HOME/proj" --focus | jq -r '.result.root_pane.pane_id')
+p2=$(herdr plugin pane open --plugin test.overlay --entrypoint view --placement overlay --focus \
+  | jq -r '.result.plugin_pane.pane.pane_id')
+wait_fg "$p2" "sleep 1000"
+snap plugin-overlay "$p2"
 
 echo "captured: $(find "$out" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ')"

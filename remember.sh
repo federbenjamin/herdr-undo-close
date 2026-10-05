@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The memory half. close.sh calls `snapshot` before every close key and `promote` after it.
 #
-#   remember.sh snapshot <pane>   staging/<pane>/: the raw herdr replies (pane, layout, procs,
-#                                 tab, workspace), agent.json while the pane holds an agent
+#   remember.sh snapshot <pane>   staging/<pane>/: the raw herdr replies (pane, layout, plugin,
+#                                 procs, tab, workspace), agent.json while the pane holds an agent
 #                                 (kept $agent_minutes after it leaves: Claude Code exits on
 #                                 two ctrl+d, the shell on the next), and the scrollback.
 #                                 Also forgets anything older than $max_age_days.
@@ -32,6 +32,8 @@ case "$cmd" in
       rm -f "$dir/agent.json"   # the agent left long ago; this is a plain shell close now
     fi
     save "$dir/layout.json" pane layout --pane "$pane" || true
+    # The one API that names a pane's plugin; it also focuses the pane, so the layout is saved first.
+    save "$dir/plugin.json" plugin pane focus "$pane" || echo '{}' > "$dir/plugin.json"
     save "$dir/procs.json" pane process-info --pane "$pane" || echo '{}' > "$dir/procs.json"
     save "$dir/tab.json" tab get "$(jq -r '.result.pane.tab_id' "$dir/pane.json")" || echo '{}' > "$dir/tab.json"
     save "$dir/workspace.json" workspace get "$(jq -r '.result.pane.workspace_id' "$dir/pane.json")" || echo '{}' > "$dir/workspace.json"

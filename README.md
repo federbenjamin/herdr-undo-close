@@ -37,8 +37,12 @@ Herdr instead. Either way the pane is remembered first. A popup is just dismisse
 ```
 close a shell pane        →  same split, same side, old output above a fresh prompt
 close a Claude Code pane  →  same split, old output, then `claude --resume` into that session
+close a Claude Code pane  →  same split, old output, then a fresh claude in that folder, with a
+  that never got a message   note
 close a pane running      →  same split, old output, and `tail -f app.log` typed at the
   `tail -f app.log`          prompt for you to press Enter
+close a plugin pane       →  the same plugin pane: an overlay over the pane you are in, a split
+  (file viewer, clauth)      or tab back in its spot
 close the last pane of    →  the tab, or the workspace, comes back with it
   a tab or workspace
 ```
@@ -57,10 +61,14 @@ remembered.
 - The typed-back command is never run for you, and is not typed at all if it contains a
   control character.
 - Closing a popup needs `python3`; without it the key goes to the pane under the popup.
-- A [herdr-file-viewer](https://github.com/smarzban/herdr-file-viewer) pane reopens beside the
-  pane it was opened from, at the file it showed when the viewer reports it (its
-  `file_viewer_open` pane token; set `report_open_file = true` in the viewer's config), else at
-  the file it was launched with.
+- A plugin pane is recognised through Herdr's `plugin pane focus`, which names its plugin and
+  entrypoint; it reopens through `plugin pane open`. A
+  [herdr-file-viewer](https://github.com/smarzban/herdr-file-viewer) pane keeps its file: the
+  one it showed when the viewer reports it (its `file_viewer_open` pane token; set
+  `report_open_file = true` in the viewer's config), else the one it was launched with.
+- A Claude Code session that never got a message has no conversation to resume (Claude Code
+  saves `<config dir>/projects/<folder>/<session id>.jsonl` only after the first message; the
+  config dir is `CLAUDE_CONFIG_DIR`, else `~/.claude`). Such a pane reopens with a fresh `claude`.
 - Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
   `herdr plugin uninstall herdr-undo-close`.
 

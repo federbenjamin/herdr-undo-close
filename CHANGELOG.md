@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- A closed plugin pane reopens as the same plugin pane, with its plugin and entrypoint read from
+  Herdr's `plugin pane focus`: an overlay (such as clauth) comes back as an overlay over the pane
+  you are in, a split or tab plugin pane in its old spot. This replaces the file viewer's own
+  path, which recognised it by process name.
+- A Claude Code pane whose session never got a message reopens as a fresh `claude` (with
+  `claude_resume_args`) in its folder, with a one-line note, instead of a failing
+  `claude --resume`. The check looks for `projects/*/<session id>.jsonl` under Claude Code's
+  config dir (`CLAUDE_CONFIG_DIR`, else `~/.claude`), the files `--resume` itself searches; if a
+  future Claude Code stops writing them, every pane starts fresh.
+- The saved-pane format is now version 2. Panes remembered before this update are dropped on the
+  first `prefix+u` after it.
 - A file viewer reopens at the file it showed when it closed, read from the viewer's
   `file_viewer_open` pane token (the viewer's `report_open_file = true`). A viewer that does not
   report it reopens at the file it was launched with, as before.
