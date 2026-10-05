@@ -175,3 +175,56 @@ gone_workspace() {
   [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
   [ -z "$(stack)" ]
 }
+
+@test "a drop error keeps the entry while a workspace reopen made for it is still open; the next press closes it, then drops" {
+  stack_plugin 1 acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(plugin_not_found: plugin not found); it is back on the stack."* ]]
+  [ "$(stack)" = "0000000001-$pane" ]
+  jq -e '.workspace_id == "w9"' "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json"
+
+  reply workspace_get_w9 0 '{"result":{"workspace":{"workspace_id":"w9"}}}'
+  reply workspace_close 0 '{"result":{}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is dropped from the stack."* ]]
+  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(grep -c '^workspace close w9$' "$HOME/fake/calls")" -eq 2 ]
+  [ -z "$(stack)" ]
+}
+
+@test "a later press that fails closes the workspace an earlier press made and could not close" {
+  stack_plugin 1 acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+
+  reply workspace_get_w9 0 '{"result":{"workspace":{"workspace_id":"w9"}}}'
+  reply workspace_close 0 '{"result":{}}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is dropped from the stack."* ]]
+  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(grep -c '^workspace close w9$' "$HOME/fake/calls")" -eq 2 ]
+  [ -z "$(stack)" ]
+}
+
+@test "an open failure in the workspace the pane came from never closes that workspace" {
+  stack_plugin 1 acme.tool tiled
+  reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+  reply workspace_get_w8 0 '{"result":{"workspace":{"workspace_id":"w8"}}}'
+  reply workspace_close 0 '{"result":{}}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is dropped from the stack."* ]]
+  [ "$(grep -c '^plugin pane open .*--placement tab --workspace w8' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(grep -c '^workspace close' "$HOME/fake/calls")" -eq 0 ]
+}

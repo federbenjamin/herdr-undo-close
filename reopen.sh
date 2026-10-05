@@ -11,7 +11,7 @@
 # variables and the login-profile hook (setup-shell) runs reopen_entry.sh from them, which
 # replays, resumes, and deletes the entry. The entry is consumed once: it moves to reopening/
 # first, goes back to the stack if nothing was created (dropped instead when its plugin or
-# entrypoint is gone), and is forgotten by age if the hook never ran. An entry that cannot be
+# entrypoint is gone, unless a workspace made for it could not be closed), and is forgotten by age if the hook never ran. An entry that cannot be
 # read is dropped and the next one is tried.
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 [ -n "$state" ] || fail "Reopen" "HERDR_PLUGIN_STATE_DIR is not set; run this as a herdr plugin action."
@@ -39,12 +39,15 @@ cwd=$(f .cwd); [ -d "$cwd" ] || cwd=$HOME
 tab_label=$(f .tab_label) ws_label=$(f .workspace_label)
 
 # Where it goes, by what still exists.
-place=split target="" direction=right side=after
+place=split target="" direction=right side=after made_ws=""
 sibling=$(f .sibling.pane_id)
 alive() { [ -n "$("$herdr" "$1" get "$2" 2>/dev/null | jq -r ".result.$1.${1}_id // empty" 2>/dev/null)" ]; }
 if [ "$(f .plugin.placement)" = overlay ]; then
   # herdr opens an overlay over the active pane and takes no target.
   place=overlay
+elif [ "$(f .workspace_made)" = true ] && alive workspace "$ws"; then
+  # A workspace an earlier press made and could not close: still this entry's to use or close.
+  place=tab made_ws=$ws
 elif [ -n "$sibling" ] && alive pane "$sibling"; then
   target=$sibling direction=$(f .sibling.direction) side=$(f .sibling.side)
 else
@@ -81,7 +84,7 @@ fi
 
 case "$kind" in
   plugin)
-    id=$(f .plugin.id) made_ws=""
+    id=$(f .plugin.id)
     args=(plugin pane open --plugin "$id" --entrypoint "$(f .plugin.entrypoint)" --focus)
     case "$place" in
       overlay) args+=(--placement overlay) ;;
@@ -99,9 +102,12 @@ case "$kind" in
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
     new=$("$herdr" "${args[@]}" 2>"$entry/open-error" | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
     if [ -z "$new" ]; then
+      kept_ws=""
       if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
-        # The workspace stays, so the entry now names it: the next press opens there, making none.
-        jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new" \
+        # The workspace stays, so the entry stays and names it: the next press opens there or
+        # closes it, making none.
+        kept_ws=$made_ws
+        jq --arg w "$made_ws" '.workspace_id = $w | .workspace_made = true' "$entry/entry.json" > "$entry/entry.json.new" \
           && mv "$entry/entry.json.new" "$entry/entry.json" || true
       fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
@@ -112,8 +118,10 @@ case "$kind" in
       [ -n "$code" ] || why="herdr gave no error code"
       case "$code" in
         plugin_not_found|plugin_pane_not_found)
-          rm -rf "$entry"
-          fail "Reopen" "Could not reopen the $id pane ($why); it is dropped from the stack." ;;
+          if [ -z "$kept_ws" ]; then
+            rm -rf "$entry"
+            fail "Reopen" "Could not reopen the $id pane ($why); it is dropped from the stack."
+          fi ;;
       esac
       fail "Reopen" "Could not reopen the $id pane ($why); it is back on the stack."
     fi
