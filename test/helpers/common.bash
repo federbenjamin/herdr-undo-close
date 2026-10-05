@@ -2,8 +2,8 @@
 # Call `isolate` first in setup() or setup_file(): it gives the test its own HOME and removes
 # every variable that could point a herdr call at the developer's own herdr (a herdr pane
 # exports HERDR_SOCKET_PATH, which wins over HOME). Every `herdr` call then goes through
-# test/helpers/herdr-guard; close.sh's popup check, which talks to the socket directly, is safe
-# only because the socket variable is gone and HOME moved, so no test may set HERDR_SOCKET_PATH.
+# test/helpers/herdr-guard; close.sh's popup check, which talks to the socket directly, connects
+# only to HERDR_SOCKET_PATH, which is gone, so no test may set HERDR_SOCKET_PATH.
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 export REPO_ROOT
 
@@ -11,7 +11,7 @@ isolate() {
   local v real
   real=$(command -v herdr || true)
   for v in $(compgen -e); do
-    case "$v" in HERDR_*|XDG_*|ZDOTDIR|BASH_ENV|ENV|CLAUDE_CONFIG_DIR) unset "$v" ;; esac
+    case "$v" in HERDR_*|XDG_*|ZDOTDIR|BASH_ENV|ENV|CLAUDE_CONFIG_DIR|UNDO_CLOSE_CONFIG_DIR) unset "$v" ;; esac
   done
   # Short on purpose: herdr's socket path must fit sun_path (104 bytes on macOS).
   export UNDO_CLOSE_TEST_TMP=${UNDO_CLOSE_TEST_TMP:-/tmp}

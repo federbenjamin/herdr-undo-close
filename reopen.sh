@@ -14,39 +14,35 @@
 # entrypoint is gone), and is forgotten by age if the hook never ran. An entry that cannot be
 # read is dropped and the next one is tried.
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+# shellcheck source=stack.sh
+. "$here/stack.sh"
 [ -n "$state" ] || fail "Reopen" "HERDR_PLUGIN_STATE_DIR is not set; run this as a herdr plugin action."
 
-f() { jq -r "$1 // empty" "$entry/entry.json" 2>/dev/null || true; }
 entry="" new=""
-restore() { if [ -z "$new" ] && [ -n "$entry" ] && [ -d "$entry" ]; then mv "$entry" "$state/closed/" 2>/dev/null || true; fi; }
+restore() { if [ -z "$new" ] && [ -n "$entry" ] && [ -d "$entry" ]; then stack_restore "$entry" 2>/dev/null || true; fi; }
 trap restore EXIT
 
-# Pop the newest readable entry.
+# Pop the newest readable entry. Every field is read as a string (`s`), so the eval below only
+# ever assigns.
 while :; do
-  newest=$( { ls -d "$state"/closed/*/ 2>/dev/null || true; } | sort | tail -n 1)
-  [ -n "$newest" ] || { notify "Reopen" "Nothing to reopen."; exit 0; }
-  newest=${newest%/}
-  mkdir -p "$state/reopening"
-  entry="$state/reopening/$(basename "$newest")"
-  mv "$newest" "$entry"
-  [ "$(f .v)" = 2 ] && [ -n "$(f .pane_id)" ] && [ -n "$(f .workspace_id)" ] && [ -n "$(f .tab_id)" ] && break
+  entry=$(stack_pop) || { notify "Reopen" "Nothing to reopen."; exit 0; }
+  ok="" old="" ws="" tab="" kind="" label="" cwd="" tab_label="" ws_label="" sibling="" sib_direction="" sib_side=""
+  placement="" plugin_id="" entrypoint="" agent="" session="" open=""
+  eval "$(jq -r 'def s: (. // "") | tostring;
+    @sh "ok=\(.v == 2 and (.pane_id // "") != "" and (.workspace_id // "") != "" and (.tab_id // "") != "") old=\(.pane_id | s) ws=\(.workspace_id | s) tab=\(.tab_id | s) kind=\(.kind | s) label=\(.label | s) cwd=\(.cwd | s) tab_label=\(.tab_label | s) ws_label=\(.workspace_label | s) sibling=\(.sibling.pane_id | s) sib_direction=\(.sibling.direction // "right" | s) sib_side=\(.sibling.side // "after" | s) placement=\(.plugin.placement | s) plugin_id=\(.plugin.id | s) entrypoint=\(.plugin.entrypoint | s) agent=\(.agent | s) session=\(.session | s) open=\(.viewer_open | s)"' "$entry/entry.json" 2>/dev/null)" 2>/dev/null || true
+  [ "$ok" = true ] && break
   echo "reopen: dropping unreadable entry $(basename "$entry")" >&2
   rm -rf "$entry"; entry=""
 done
-
-old=$(f .pane_id) ws=$(f .workspace_id) tab=$(f .tab_id) kind=$(f .kind) label=$(f .label)
-cwd=$(f .cwd); [ -d "$cwd" ] || cwd=$HOME
-tab_label=$(f .tab_label) ws_label=$(f .workspace_label)
+[ -d "$cwd" ] || cwd=$HOME
 
 # Where it goes, by what still exists.
 place=split target="" direction=right side=after
-sibling=$(f .sibling.pane_id)
-alive() { [ -n "$("$herdr" "$1" get "$2" 2>/dev/null | jq -r ".result.$1.${1}_id // empty" 2>/dev/null)" ]; }
-if [ "$(f .plugin.placement)" = overlay ]; then
+if [ "$placement" = overlay ]; then
   # herdr opens an overlay over the active pane and takes no target.
   place=overlay
-elif [ -n "$sibling" ] && alive pane "$sibling"; then
-  target=$sibling direction=$(f .sibling.direction) side=$(f .sibling.side)
+elif [ -n "$sibling" ] && ! gone pane "$sibling"; then
+  target=$sibling direction=$sib_direction side=$sib_side
 else
   target=$("$herdr" pane list --workspace "$ws" 2>/dev/null \
     | jq -r --arg t "$tab" '[.result.panes[]? | select(.tab_id == $t)][0].pane_id // empty' 2>/dev/null || true)
@@ -55,7 +51,7 @@ else
     direction=$("$herdr" pane layout --pane "$target" 2>/dev/null | jq -r --arg p "$target" '
       .result.layout.panes[] | select(.pane_id == $p) | .rect
       | if .height * 2 > .width then "down" else "right" end' 2>/dev/null || echo right)
-  elif alive workspace "$ws"; then
+  elif ! gone workspace "$ws"; then
     place=tab
   else
     place=workspace
@@ -65,39 +61,51 @@ fi
 # The one command a shell pane ran, to type back. Refused when any byte is a control character:
 # a ^C or newline inside the typed text would make the shell run it (never trust a file name).
 preload=""
-if [ "$kind" = shell ] && [ "$(f '.argv | length')" != "" ] && [ "$(f '.argv | length')" != 0 ]; then
-  if jq -e '.argv | all(test("[[:cntrl:]]") | not)' "$entry/entry.json" >/dev/null 2>&1; then
-    preload=$(jq -r '.argv | map(if test("^[A-Za-z0-9_@%+=:,./-]+$") then . else @sh end) | join(" ")' "$entry/entry.json")
-  fi
+if [ "$kind" = shell ] && jq -e '(.argv | length > 0) and (.argv | all(test("[[:cntrl:]]") | not))' "$entry/entry.json" >/dev/null 2>&1; then
+  preload=$(jq -r '.argv | map(if test("^[A-Za-z0-9_@%+=:,./-]+$") then . else @sh end) | join(" ")' "$entry/entry.json")
 fi
 
 # What the hook will run, resolved here where PATH is known; reopen_entry.sh needs nothing else.
 if [ "$kind" = agent ]; then
   {
-    printf 'agent=%q\nsession=%q\n' "$(f .agent)" "$(f .session)"
+    printf 'agent=%q\nsession=%q\n' "$agent" "$session"
     printf 'claude_bin=%q\nclaude_resume_args=%q\n' "$(command -v claude || true)" "$claude_resume_args"
   } > "$entry/launch"
 fi
 
+ws_args=(--cwd "$cwd"); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
+
+# restore_labels <new pane>: the tab's label when the pane came back as a new tab or workspace,
+# and the pane's own.
+restore_labels() {
+  local new_tab
+  if [ -n "$tab_label" ] && { [ "$place" = tab ] || [ "$place" = workspace ]; }; then
+    new_tab=$("$herdr" pane get "$1" 2>/dev/null | jq -r '.result.pane.tab_id // empty' || true)
+    [ -z "$new_tab" ] || "$herdr" tab rename "$new_tab" "$tab_label" >/dev/null 2>&1 || true
+  fi
+  [ -z "$label" ] || "$herdr" pane rename "$1" "$label" >/dev/null 2>&1 || true
+}
+
 case "$kind" in
   plugin)
-    id=$(f .plugin.id) made_ws=""
-    args=(plugin pane open --plugin "$id" --entrypoint "$(f .plugin.entrypoint)" --focus)
+    made_ws=""
+    args=(plugin pane open --plugin "$plugin_id" --entrypoint "$entrypoint" --focus)
     case "$place" in
       overlay) args+=(--placement overlay) ;;
       split) args+=(--placement split --direction "$direction" --target-pane "$target") ;;
       tab)   args+=(--placement tab --workspace "$ws") ;;
       workspace)
         # A workspace needs a first pane; the plugin pane then opens as its own tab beside that shell.
-        ws_args=(--cwd "$cwd" --no-focus); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
-        ws=$("$herdr" workspace create "${ws_args[@]}" 2>/dev/null | jq -r '.result.workspace.workspace_id // empty' || true)
-        [ -n "$ws" ] || fail "Reopen" "Could not recreate the workspace for the $id pane; it is back on the stack."
+        ws=$("$herdr" workspace create "${ws_args[@]}" --no-focus 2>/dev/null | jq -r '.result.workspace.workspace_id // empty' || true)
+        [ -n "$ws" ] || fail "Reopen" "Could not recreate the workspace for the $plugin_id pane; it is back on the stack."
         made_ws=$ws
         args+=(--placement tab --workspace "$ws") ;;
     esac
-    open=$(f .viewer_open)
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
-    new=$("$herdr" "${args[@]}" 2>"$entry/open-error" | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
+    out=""
+    if out=$("$herdr" "${args[@]}" 2>&1); then
+      new=$(jq -r '.result.plugin_pane.pane.pane_id // empty' <<<"$out" 2>/dev/null || true)
+    fi
     if [ -z "$new" ]; then
       if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
         # The workspace stays, so the entry now names it: the next press opens there, making none.
@@ -107,17 +115,15 @@ case "$kind" in
       fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
-      code=$(jq -r '.error.code // empty' "$entry/open-error" 2>/dev/null || true)
-      why=$(jq -r '.error | "\(.code)\(if .message then ": " + .message else "" end)" | gsub("[[:cntrl:]]"; " ")' "$entry/open-error" 2>/dev/null || true)
-      rm -f "$entry/open-error"
-      [ -n "$code" ] || why="herdr gave no error code"
+      herdr_error "$out"
       case "$code" in
         plugin_not_found|plugin_pane_not_found)
           rm -rf "$entry"
-          fail "Reopen" "Could not reopen the $id pane ($why); it is dropped from the stack." ;;
+          fail "Reopen" "Could not reopen the $plugin_id pane ($why); it is dropped from the stack." ;;
       esac
-      fail "Reopen" "Could not reopen the $id pane ($why); it is back on the stack."
+      fail "Reopen" "Could not reopen the $plugin_id pane ($why); it is back on the stack."
     fi
+    restore_labels "$new"
     rm -rf "$entry"
     ;;
   agent|shell)
@@ -127,18 +133,12 @@ case "$kind" in
         new=$("$herdr" pane split --pane "$target" --direction "$direction" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null \
           | jq -r '.result.pane.pane_id // empty' || true) ;;
       tab)
-        tab_args=(--workspace "$ws" --cwd "$cwd" --focus); [ -n "$tab_label" ] && tab_args+=(--label "$tab_label")
-        new=$("$herdr" tab create "${tab_args[@]}" "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
+        new=$("$herdr" tab create --workspace "$ws" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
       workspace)
-        ws_args=(--cwd "$cwd" --focus); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
-        new=$("$herdr" workspace create "${ws_args[@]}" "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true)
-        if [ -n "$new" ] && [ -n "$tab_label" ]; then
-          new_tab=$("$herdr" pane get "$new" 2>/dev/null | jq -r '.result.pane.tab_id // empty' || true)
-          [ -z "$new_tab" ] || "$herdr" tab rename "$new_tab" "$tab_label" >/dev/null 2>&1 || true
-        fi ;;
+        new=$("$herdr" workspace create "${ws_args[@]}" --focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
     esac
     [ -n "$new" ] || fail "Reopen" "Could not reopen pane $old; it is back on the stack."
-    [ -z "$label" ] || "$herdr" pane rename "$new" "$label" >/dev/null 2>&1 || true
+    restore_labels "$new"
     if [ -n "$preload" ]; then
       # The hook deletes the entry once the scrollback is replayed and the prompt is next; type then.
       for _ in $(seq 1 50); do [ -e "$entry" ] || break; sleep 0.1; done
