@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # The close half (action `close`, ctrl+d): close whatever is in the focused pane the right way,
-# and remember it first.
-#   a program that takes ctrl+d itself ($passthrough_regex: shells, REPLs, agents, pagers,
+# and remember it first. Decided from the snapshot remember.sh takes:
+#   a plugin pane                                   -> herdr closes the pane
+#   an agent, or a program that takes ctrl+d itself
+#   ($passthrough_regex: shells, REPLs, pagers,
 #   editors)                                        -> send ctrl+d, it exits (or scrolls) itself
 #   anything else (a file viewer, lazygit, a popup) -> herdr closes the pane
-# Usage: close.sh [--dry-run] [pane_id]   (pane_id defaults to the focused pane)
+# A snapshot that fails passes the key through: ctrl+d must never do nothing.
+# Usage: close.sh [pane_id]   (pane_id defaults to the focused pane)
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+# shellcheck source=stack.sh
+. "$here/stack.sh"
 
-dry=0
-[ "${1:-}" = "--dry-run" ] && { dry=1; shift; }
 pane="${1:-}"
 if [ -z "$pane" ]; then
   pane=$(printf '%s' "${HERDR_PLUGIN_CONTEXT_JSON:-}" | jq -r '.focused_pane_id // empty' 2>/dev/null || true)
@@ -21,9 +24,10 @@ fi
 # up and is now gone; otherwise fall through to the focused pane. Needs python3; on a Mac
 # without the developer tools the python3 stub would open an install dialog, so skip it there.
 popup_close() {
+  [ -n "${HERDR_SOCKET_PATH:-}" ] || return 1
   command -v python3 >/dev/null 2>&1 || return 1
   [ "$(uname)" != Darwin ] || xcode-select -p >/dev/null 2>&1 || return 1
-  python3 - "${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}" <<'PY'
+  python3 - "$HERDR_SOCKET_PATH" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.settimeout(3)
 s.connect(sys.argv[1])
@@ -32,26 +36,22 @@ r = json.loads(s.recv(65536).decode().splitlines()[0])
 sys.exit(0 if "result" in r else 1)
 PY
 }
-if [ "$dry" = 0 ] && popup_close 2>/dev/null; then exit 0; fi
+if popup_close 2>/dev/null; then exit 0; fi
 
-# Pass the key through when the pane runs an agent or a program on the list; else close.
-# Any failure while deciding falls back to passing the key through: ctrl+d must never do nothing.
+# Remember first: after the key the process may be gone.
 decision=pass
-agent=$("$herdr" pane get "$pane" 2>/dev/null | jq -r '.result.pane.agent // empty' 2>/dev/null || true)
-if [ -z "$agent" ]; then
-  names=$("$herdr" pane process-info --pane "$pane" 2>/dev/null \
-    | jq -r '.result.process_info.foreground_processes[]? | (.argv0 // .argv[0] // "") | split("/") | last | ltrimstr("-")' 2>/dev/null || true)
-  if [ -n "$names" ] && ! printf '%s\n' "$names" | grep -Eq "$passthrough_regex"; then
+dir=$(stack_staging "$pane")
+if bash "$here/remember.sh" snapshot "$pane" 2>/dev/null && [ -s "$dir/pane.json" ]; then
+  if jq -e '.result.plugin_pane != null' "$dir/plugin.json" >/dev/null 2>&1; then
     decision=close
+  elif [ -z "$(jq -r '.result.pane.agent // empty' "$dir/pane.json" 2>/dev/null || true)" ]; then
+    names=$(jq -L "$here" -r 'include "names"; .result.process_info.foreground_processes[]? | pname' "$dir/procs.json" 2>/dev/null || true)
+    if [ -n "$names" ] && ! printf '%s\n' "$names" | grep -Eq "$passthrough_regex"; then
+      decision=close
+    fi
   fi
 fi
 
-if [ "$dry" = 1 ]; then
-  echo "$pane: agent=${agent:-none} -> $decision"
-  exit 0
-fi
-# Remember first: after the key the process may be gone. A snapshot failure never blocks the close.
-bash "$here/remember.sh" snapshot "$pane" 2>/dev/null || true
 case "$decision" in
   pass)  "$herdr" pane send-keys "$pane" ctrl+d >/dev/null ;;
   close) "$herdr" pane close "$pane" >/dev/null ;;
