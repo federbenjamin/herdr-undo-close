@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- `ctrl+d` always closes a plugin pane, even when the program in it would take the key itself
+  (a shell, an agent). The decision now reads the snapshot taken for the close, so each `ctrl+d`
+  makes fewer Herdr calls before the key.
+- A reopened plugin pane gets its tab and pane labels back, as a shell pane does.
+- `setup-keys` checks the new config before it touches the file, so a config that fails
+  `herdr config check` is left exactly as it was, an earlier block included; and it writes
+  through a symlinked config, which stays a symlink (`setup-shell` too).
+- Reopen no longer treats a failed Herdr call as a closed pane or workspace: only Herdr's own
+  "not found" sends a pane to a new tab or workspace.
+- Two panes closed at the same instant keep their order on the stack.
+- The saved entry no longer carries `programs` (nothing read it).
+- `close.sh --dry-run` is removed.
 - A closed plugin pane reopens as the same plugin pane, with its plugin and entrypoint read from
   Herdr's `plugin pane focus`: an overlay (such as clauth) comes back as an overlay over the pane
   you are in, a split or tab plugin pane in its old spot. This replaces the file viewer's own
