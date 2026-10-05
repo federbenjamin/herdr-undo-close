@@ -10,8 +10,9 @@
 # The shell cannot be told what to do at creation, so a reopened pane carries two environment
 # variables and the login-profile hook (setup-shell) runs reopen_entry.sh from them, which
 # replays, resumes, and deletes the entry. The entry is consumed once: it moves to reopening/
-# first, goes back to the stack if nothing was created, and is forgotten by age if the hook
-# never ran. An entry that cannot be read is dropped and the next one is tried.
+# first, goes back to the stack if nothing was created (dropped instead when its plugin or
+# entrypoint is gone), and is forgotten by age if the hook never ran. An entry that cannot be
+# read is dropped and the next one is tried.
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 [ -n "$state" ] || fail "Reopen" "HERDR_PLUGIN_STATE_DIR is not set; run this as a herdr plugin action."
 
@@ -95,8 +96,21 @@ case "$kind" in
     esac
     open=$(f .viewer_open)
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
-    new=$("$herdr" "${args[@]}" 2>/dev/null | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
-    [ -n "$new" ] || fail "Reopen" "Could not reopen the $id pane; it is back on the stack."
+    new=$("$herdr" "${args[@]}" 2>"$entry/open-error" | jq -r '.result.plugin_pane.pane.pane_id // empty' || true)
+    if [ -z "$new" ]; then
+      # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
+      # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
+      code=$(jq -r '.error.code // empty' "$entry/open-error" 2>/dev/null || true)
+      why=$(jq -r '.error | "\(.code)\(if .message then ": " + .message else "" end)" | gsub("[[:cntrl:]]"; " ")' "$entry/open-error" 2>/dev/null || true)
+      rm -f "$entry/open-error"
+      [ -n "$code" ] || why="herdr gave no error code"
+      case "$code" in
+        plugin_not_found|plugin_pane_not_found)
+          rm -rf "$entry"
+          fail "Reopen" "Could not reopen the $id pane ($why); it is dropped from the stack." ;;
+      esac
+      fail "Reopen" "Could not reopen the $id pane ($why); it is back on the stack."
+    fi
     rm -rf "$entry"
     ;;
   agent|shell)

@@ -5,7 +5,10 @@
 - A closed plugin pane reopens as the same plugin pane, with its plugin and entrypoint read from
   Herdr's `plugin pane focus`: an overlay (such as clauth) comes back as an overlay over the pane
   you are in, a split or tab plugin pane in its old spot. This replaces the file viewer's own
-  path, which recognised it by process name.
+  path, which recognised it by process name. When a plugin pane cannot reopen, the message gives
+  Herdr's reason; a pane whose plugin or entrypoint is gone (uninstalled, unlinked) is dropped from
+  the stack, so the next `prefix+u` reaches the pane below it. A failed plugin lookup at close is
+  written to `herdr plugin log`.
 - A Claude Code pane whose session never got a message reopens as a fresh `claude` (with
   `claude_resume_args`) in its folder, with a one-line note, instead of a failing
   `claude --resume`. The check looks for `projects/*/<session id>.jsonl` under Claude Code's
