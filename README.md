@@ -58,6 +58,9 @@ remembered.
 - A remembered pane's scrollback is written to disk, readable by you only, under
   `~/.local/state/herdr/plugins/herdr-undo-close/`, until it is reopened, pushed out by `keep`
   newer closes, or `max_age_days` old. Delete the directory any time.
+- A pane that was alone in its tab or workspace reopens as a new tab or workspace in the
+  background: you stay where you are. A focus that a script asks Herdr for moves every attached
+  Herdr window, so a reopen never takes one.
 - The typed-back command is never run for you, and is not typed at all if it contains a
   control character.
 - Closing a popup needs `python3`; without it the key goes to the pane under the popup.

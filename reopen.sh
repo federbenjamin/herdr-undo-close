@@ -133,9 +133,9 @@ case "$kind" in
         new=$("$herdr" pane split --pane "$target" --direction "$direction" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null \
           | jq -r '.result.pane.pane_id // empty' || true) ;;
       tab)
-        new=$("$herdr" tab create --workspace "$ws" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
+        new=$("$herdr" tab create --workspace "$ws" --cwd "$cwd" --no-focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
       workspace)
-        new=$("$herdr" workspace create "${ws_args[@]}" --focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
+        new=$("$herdr" workspace create "${ws_args[@]}" --no-focus "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
     esac
     [ -n "$new" ] || fail "Reopen" "Could not reopen pane $old; it is back on the stack."
     restore_labels "$new"

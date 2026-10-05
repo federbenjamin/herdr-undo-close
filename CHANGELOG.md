@@ -14,6 +14,9 @@
 - Two panes closed at the same instant keep their order on the stack.
 - The saved entry no longer carries `programs` (nothing read it).
 - `close.sh --dry-run` is removed.
+- A pane that was alone in its tab or workspace reopens in the background, as a new tab or
+  workspace you switch to yourself. A focus asked of Herdr from a script moves every attached
+  Herdr window, so with two windows open a reopen used to pull both to it.
 - A closed plugin pane reopens as the same plugin pane, with its plugin and entrypoint read from
   Herdr's `plugin pane focus`: an overlay (such as clauth) comes back as an overlay over the pane
   you are in, a split or tab plugin pane in its old spot. This replaces the file viewer's own
