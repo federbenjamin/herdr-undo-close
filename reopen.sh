@@ -127,10 +127,10 @@ case "$kind" in
         new=$("$herdr" pane split --pane "$target" --direction "$direction" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null \
           | jq -r '.result.pane.pane_id // empty' || true) ;;
       tab)
-        tab_args=(--workspace "$ws" --cwd "$cwd" --focus); [ -n "$tab_label" ] && tab_args+=(--label "$tab_label")
+        tab_args=(--workspace "$ws" --cwd "$cwd" --no-focus); [ -n "$tab_label" ] && tab_args+=(--label "$tab_label")
         new=$("$herdr" tab create "${tab_args[@]}" "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true) ;;
       workspace)
-        ws_args=(--cwd "$cwd" --focus); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
+        ws_args=(--cwd "$cwd" --no-focus); [ -n "$ws_label" ] && ws_args+=(--label "$ws_label")
         new=$("$herdr" workspace create "${ws_args[@]}" "${env[@]}" 2>/dev/null | jq -r '.result.root_pane.pane_id // empty' || true)
         if [ -n "$new" ] && [ -n "$tab_label" ]; then
           new_tab=$("$herdr" pane get "$new" 2>/dev/null | jq -r '.result.pane.tab_id // empty' || true)
