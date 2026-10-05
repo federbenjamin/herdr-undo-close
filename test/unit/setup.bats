@@ -1,4 +1,5 @@
 load ../helpers/common
+load ../helpers/fake-herdr
 
 # setup.sh runs against a temp HOME; its `herdr config check` calls go through the guard to the
 # real herdr, which needs no server for that.
@@ -110,6 +111,20 @@ TOML
   [ "$status" -ne 0 ]
   [[ "$output" == *"does not pass"* ]]
   cmp "$config" "$BATS_TEST_TMPDIR/before"
+}
+
+@test "a new config that fails the check leaves the file byte-identical, previous block included" {
+  printf '# mine\n' > "$config"
+  setup_sh keys
+  cp "$config" "$BATS_TEST_TMPDIR/before"
+  fake_herdr
+  reply 2 0 ''
+  reply 3 1 'config parse error'
+  run setup_sh keys
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"was not changed"* ]]
+  cmp "$config" "$BATS_TEST_TMPDIR/before"
+  [ ! -e "$config.undo-close-new" ]
 }
 
 @test "the first backup is kept on a second run" {
