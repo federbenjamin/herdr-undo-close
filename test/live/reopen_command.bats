@@ -10,13 +10,11 @@ teardown() { live_teardown; }
 
 # wait_leader <pane> <name>: the pane's foreground process group leader is <name>.
 wait_leader() {
-  for _ in $(seq 1 50); do
-    h pane process-info --pane "$1" | jq -e --arg n "$2" '.result.process_info
-      | .foreground_process_group_id as $g | any(.foreground_processes[]?; .pid == $g and (.argv[0] | split("/") | last) == $n)' >/dev/null && return 0
-    sleep 0.1
-  done
-  echo "wait_leader: $2 never led $1" >&2
-  return 1
+  poll 50 0.1 leads "$1" "$2" || { echo "wait_leader: $2 never led $1" >&2; return 1; }
+}
+leads() {
+  fg_procs "$1" | jq -L "$REPO_ROOT" -e --arg n "$2" 'include "names"; .result.process_info
+    | .foreground_process_group_id as $g | any(.foreground_processes[]?; .pid == $g and pname == $n)'
 }
 
 @test "a pane running tail -F '<dir>/a;b' reopens with that command typed, not run" {
