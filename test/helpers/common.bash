@@ -11,7 +11,7 @@ isolate() {
   local v real
   real=$(command -v herdr || true)
   for v in $(compgen -e); do
-    case "$v" in HERDR_*|XDG_*|ZDOTDIR|BASH_ENV|ENV) unset "$v" ;; esac
+    case "$v" in HERDR_*|XDG_*|ZDOTDIR|BASH_ENV|ENV|CLAUDE_CONFIG_DIR) unset "$v" ;; esac
   done
   # Short on purpose: herdr's socket path must fit sun_path (104 bytes on macOS).
   export UNDO_CLOSE_TEST_TMP=${UNDO_CLOSE_TEST_TMP:-/tmp}
