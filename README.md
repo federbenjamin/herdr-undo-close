@@ -1,8 +1,33 @@
 # herdr-undo-close
 
-Undo close for [Herdr](https://herdr.dev) panes. Close a pane with `ctrl+d`, get it back with
-`prefix+u`: same spot, same scrollback, and a Claude Code pane picks up its conversation where
-it left off.
+<p align="center"><strong>Undo close for Herdr panes: ctrl+d closes a pane and remembers it, prefix+u reopens it in its old spot with scrollback</strong></p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/federbenjamin/herdr-undo-close" alt="License"></a>
+  <a href="https://github.com/federbenjamin/herdr-undo-close/releases/latest"><img src="https://img.shields.io/github/v/release/federbenjamin/herdr-undo-close" alt="Release"></a>
+  <a href=".github/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/federbenjamin/herdr-undo-close/test.yml" alt="CI"></a>
+  <a href="https://github.com/herdrdev/herdr"><img src="https://img.shields.io/badge/herdr-%E2%89%A5%200.9.0-blue" alt="herdr ≥ 0.9.0"></a>
+</p>
+
+<p align="center"><img src="docs/media/hero.png" alt="A Herdr split whose right pane was closed while it ran tail -f app.log and reopened: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt" width="720"></p>
+
+A [Herdr](https://herdr.dev) plugin for anyone who has closed a pane and wanted it back. Close a
+pane with `ctrl+d`, get it back with `prefix+u`: same spot, same scrollback, and a Claude Code
+pane picks up its conversation where it left off.
+
+## Features
+
+- **`ctrl+d` closes anything.** A shell, a REPL, Claude Code, vim or less get the key and exit on
+  their own terms; a pane that would ignore it, such as a file viewer or lazygit, is closed by
+  Herdr. Either way the pane is remembered first.
+- **`prefix+u` brings it back where it was.** Same split, same side, its old output above a fresh
+  prompt, and the pane closed before it one press later.
+- **A Claude Code pane resumes its conversation.** It reopens with `claude --resume` into the same
+  session.
+- **A running command comes back typed, not run.** A pane that ran `tail -f app.log` reopens with
+  its output and that command waiting at the prompt.
+- **Plugin panes, tabs and workspaces come back too.** A file viewer or an overlay reopens as the
+  same plugin pane; the last pane of a tab or workspace brings that tab or workspace back with it.
 
 ## Install
 
@@ -26,13 +51,17 @@ herdr-undo-close`; `invoke` itself prints only that it started.
 
 For Claude Code resume, Herdr must know the session: `herdr integration install claude` once.
 
-## What you get
+Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
+`herdr plugin uninstall herdr-undo-close`.
 
-**`ctrl+d` closes anything.** A shell, a REPL, Claude Code, vim or less get the key and exit
-(or scroll) on their own terms. A file viewer or lazygit, which would ignore it, are closed by
-Herdr instead. Either way the pane is remembered first. A popup is just dismissed.
+## Usage
 
-**`prefix+u` brings the last one back.**
+| key | action | what it does |
+| --- | --- | --- |
+| `ctrl+d` | `herdr-undo-close.close` | closes the focused pane and remembers it; a popup is just dismissed |
+| `prefix+u` | `herdr-undo-close.reopen` | reopens the last closed pane |
+
+What `prefix+u` brings back:
 
 ```
 close a shell pane        →  same split, same side, old output above a fresh prompt
@@ -53,7 +82,23 @@ What it cannot do: bring back a process. The old `tail -f` is gone; you get its 
 command line. A pane closed some other way (`exit`, a crash, Herdr's close-tab key) is not
 remembered.
 
-## Good to know
+## Configuration
+
+Optional. Copy a line from `config.example` into the file `herdr plugin config-dir
+herdr-undo-close` points at, named `config`, and change it. It is sourced as shell.
+
+| setting | default | |
+| --- | --- | --- |
+| `claude_resume_args` | none | flags for `claude --resume`, e.g. `"--permission-mode auto"` |
+| `passthrough_regex` | shells, REPLs, agents, pagers, editors | programs that get `ctrl+d` instead of being closed |
+| `keep` | 20 | panes remembered |
+| `max_age_days` | 7 | days before a remembered pane is forgotten |
+| `agent_minutes` | 10 | how long after Claude exits a close of that pane still reopens as Claude |
+
+Prefer your own keys? Skip `setup-keys` and bind `herdr-undo-close.close` and
+`herdr-undo-close.reopen` yourself.
+
+## How it works
 
 - A remembered pane's scrollback is written to disk, readable by you only, under
   `~/.local/state/herdr/plugins/herdr-undo-close/`, until it is reopened, pushed out by `keep`
@@ -72,26 +117,15 @@ remembered.
 - A Claude Code session that never got a message has no conversation to resume (Claude Code
   saves `<config dir>/projects/<folder>/<session id>.jsonl` only after the first message; the
   config dir is `CLAUDE_CONFIG_DIR`, else `~/.claude`). Such a pane reopens with a fresh `claude`.
-- Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
-  `herdr plugin uninstall herdr-undo-close`.
 
-## Configuration
+## Contributing
 
-Optional. Copy a line from `config.example` into the file `herdr plugin config-dir
-herdr-undo-close` points at, named `config`, and change it. It is sourced as shell.
-
-| setting | default | |
-| --- | --- | --- |
-| `claude_resume_args` | none | flags for `claude --resume`, e.g. `"--permission-mode auto"` |
-| `passthrough_regex` | shells, REPLs, agents, pagers, editors | programs that get `ctrl+d` instead of being closed |
-| `keep` | 20 | panes remembered |
-| `max_age_days` | 7 | days before a remembered pane is forgotten |
-| `agent_minutes` | 10 | how long after Claude exits a close of that pane still reopens as Claude |
-
-Prefer your own keys? Skip `setup-keys` and bind `herdr-undo-close.close` and
-`herdr-undo-close.reopen` yourself.
-
-## Development
+Report a bug or ask for a feature in
+[the issue tracker](https://github.com/federbenjamin/herdr-undo-close/issues). Report a security
+problem privately, as the
+[security policy](https://github.com/federbenjamin/.github/blob/main/SECURITY.md) says. Pull
+requests are welcome; [CONTRIBUTING](https://github.com/federbenjamin/.github/blob/main/CONTRIBUTING.md)
+says how.
 
 Two test layers, on [bats-core](https://github.com/bats-core/bats-core). You need Herdr 0.9+,
 `jq` and bats-core; the zsh case is skipped when `zsh` is not installed.
@@ -110,9 +144,9 @@ teardown. The one call that skips Herdr, `close.sh`'s popup check, needs `HERDR_
 which the tests remove, so it makes no connection.
 
 `test/fixtures/capture.sh` re-captures the saved replies from an isolated server, for a new
-Herdr version. CI (`.github/workflows/test.yml`) runs shellcheck and both layers on Ubuntu and
-macOS.
+Herdr version. `docs/media/hero.sh` re-takes the picture above the same way (it needs `vhs`). CI
+(`.github/workflows/test.yml`) runs shellcheck and both layers on Ubuntu and macOS.
 
 ## License
 
-MIT.
+MIT © Benjamin Feder. See [LICENSE](LICENSE).
