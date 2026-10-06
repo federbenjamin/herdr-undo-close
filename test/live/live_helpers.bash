@@ -117,7 +117,7 @@ not_found() {
 not_running() {
   local out
   out=$(fg_procs "$1") || return 1
-  printf '%s' "$out" | jq -L "$REPO_ROOT" -e --arg n "$2" 'include "names"; .result.process_info.foreground_processes
+  printf '%s' "$out" | jq -L "$REPO_ROOT/internal" -e --arg n "$2" 'include "names"; .result.process_info.foreground_processes
     | type == "array" and (any(.[]; pname == $n) | not)' >/dev/null
 }
 

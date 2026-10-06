@@ -6,7 +6,7 @@ setup() {
   isolate
   # shellcheck disable=SC2034  # read by stack.sh
   state=$HERDR_PLUGIN_STATE_DIR keep=20 max_age_days=7
-  . "$REPO_ROOT/stack.sh"
+  . "$REPO_ROOT/internal/stack.sh"
 }
 teardown() { unisolate; }
 
@@ -104,7 +104,7 @@ seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
   # Its own process, as promote is: killed at the removal of the dead lock, holding seq.break.
   run bash -c '
     state=$1 keep=20 max_age_days=7
-    . "$2/stack.sh"
+    . "$2/internal/stack.sh"
     rm() { if [ "$*" = "-f $state/seq.lock" ]; then kill -9 "$$"; sh -c '"'"'kill -9 "$PPID"'"'"'; fi; command rm "$@"; }
     stack_push w1:p0' _ "$state" "$REPO_ROOT"
   [ "$status" -eq 137 ]

@@ -23,7 +23,7 @@ gone_pane='{"error":{"code":"pane_not_found","message":"pane not found"},"id":"c
 # it does after a close, so promote ends at its first poll; the test HOME goes only after that.
 teardown() {
   reply pane_get 1 "$gone_pane"
-  for _ in {1..40}; do pgrep -f "$REPO_ROOT/remember.sh promote" >/dev/null || break; sleep 0.1; done
+  for _ in {1..40}; do pgrep -f "$REPO_ROOT/internal/remember.sh promote" >/dev/null || break; sleep 0.1; done
   unisolate
 }
 
