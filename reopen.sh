@@ -18,8 +18,18 @@
 . "$here/stack.sh"
 [ -n "$state" ] || fail "Reopen" "HERDR_PLUGIN_STATE_DIR is not set; run this as a herdr plugin action."
 
-entry="" new=""
-restore() { if [ -z "$new" ] && [ -n "$entry" ] && [ -d "$entry" ]; then stack_restore "$entry" 2>/dev/null || true; fi; }
+entry="" new="" made_ws=""
+# On any exit with no pane opened: a workspace this run made is closed, or, when it cannot be, the
+# entry now names it so the next press opens there, making none; then the entry goes back.
+restore() {
+  [ -z "$new" ] || return 0
+  if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1 && [ -d "$entry" ]; then
+    if jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new"; then
+      mv "$entry/entry.json.new" "$entry/entry.json" || true
+    fi
+  fi
+  if [ -n "$entry" ] && [ -d "$entry" ]; then stack_restore "$entry" 2>/dev/null || true; fi
+}
 trap restore EXIT
 
 # Pop the newest readable entry. Every field is read as a string (`s`), so the eval below only
@@ -91,7 +101,6 @@ restore_labels() {
 
 case "$kind" in
   plugin)
-    made_ws=""
     args=(plugin pane open --plugin "$plugin_id" --entrypoint "$entrypoint" --focus)
     case "$place" in
       overlay) args+=(--placement overlay) ;;
@@ -107,19 +116,14 @@ case "$kind" in
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
     # The reply is read from stdout alone and herdr's error from stderr alone, so a warning on
     # one stream never spoils the other.
-    reply=$(mktemp "${TMPDIR:-/tmp}/undo-close.XXXXXX")
+    reply=$(mktemp "${TMPDIR:-/tmp}/undo-close.XXXXXX") \
+      || fail "Reopen" "Could not reopen the $plugin_id pane (could not make a temporary file); it is back on the stack."
     err=""
     if err=$("$herdr" "${args[@]}" 2>&1 >"$reply"); then
       new=$(jq -r '.result.plugin_pane.pane.pane_id // empty' "$reply" 2>/dev/null || true)
     fi
     rm -f "$reply"
     if [ -z "$new" ]; then
-      if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
-        # The workspace stays, so the entry now names it: the next press opens there, making none.
-        if jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new"; then
-          mv "$entry/entry.json.new" "$entry/entry.json" || true
-        fi
-      fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
       herdr_error "$err"

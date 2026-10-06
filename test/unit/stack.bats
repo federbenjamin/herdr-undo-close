@@ -96,6 +96,44 @@ seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
   [ "$(seqs)" = "0000000001 0000000002 " ]
 }
 
+@test "a promote killed while it clears a dead promote's lock does not block the pushes after it" {
+  hold_lock "$(dead_pid)"
+  # Its own process, as promote is: killed at the removal of the dead lock, holding seq.break.
+  run bash -c '
+    state=$1 keep=20 max_age_days=7
+    . "$2/stack.sh"
+    rm() { if [ "$*" = "-f $state/seq.lock" ]; then kill -9 "$$" "$BASHPID"; fi; command rm "$@"; }
+    stack_push w1:p0' _ "$state" "$REPO_ROOT"
+  [ "$status" -eq 137 ]
+  [ -e "$state/seq.break" ] || [ -L "$state/seq.break" ]
+  staged w1:p1
+  run stack_push w1:p1
+  [ "$status" -eq 0 ]
+  [ -f "$state/closed/0000000001-w1:p1/entry.json" ]
+  [ ! -e "$state/seq.lock" ] && [ ! -L "$state/seq.lock" ]
+  [ ! -e "$state/seq.break" ] && [ ! -L "$state/seq.break" ]
+}
+
+@test "a breaker a minute old is cleared even when its pid is alive" {
+  hold_lock "$(dead_pid)"
+  ln -s "$$.$(( $(date +%s) - 120 )).1" "$state/seq.break"
+  staged w1:p1
+  run stack_push w1:p1
+  [ "$status" -eq 0 ]
+  [ -f "$state/closed/0000000001-w1:p1/entry.json" ]
+}
+
+@test "a breaker a live push holds is left to it" {
+  hold_lock "$(dead_pid)"
+  ln -s "$$.$(date +%s).1" "$state/seq.break"
+  held=$(readlink "$state/seq.break")
+  staged w1:p1
+  run stack_push w1:p1
+  [ "$status" -ne 0 ]
+  [ "$(readlink "$state/seq.break")" = "$held" ]
+  [ -z "$(ls "$state/closed")" ]
+}
+
 @test "a lock a minute old is taken over even when its pid is alive" {
   hold_lock $$ 120
   staged w1:p1

@@ -86,6 +86,32 @@ busy='{"error":{"code":"internal_error","message":"busy"},"id":"cli:plugin"}'
   [ "$(calls | grep -c '^pane send-keys')" -eq 0 ]
 }
 
+# close_then_promote_fails: ctrl+d on the plugin pane, then herdr says it is gone; waits for the
+# notification the detached promote shows when the stack does not take the pane.
+close_then_promote_fails() {
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  reply pane_process-info 0 "$(cat "$(fx lone)/procs.json")"
+  run bash "$REPO_ROOT/close.sh" "$pane"
+  [ "$status" -eq 0 ]
+  reply pane_get 1 "$gone_pane"
+  for _ in {1..40}; do calls | grep -q '^notification show Close' && break; sleep 0.1; done
+  calls | grep -qx "notification show Close --body Could not remember the closed pane $pane; it cannot be reopened. --sound none"
+  [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/closed")" ]
+  [ -d "$HERDR_PLUGIN_STATE_DIR/staging/$pane" ]
+}
+
+@test "a closed pane the stack cannot hold is reported in a notification" {
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR/closed"
+  chmod 500 "$HERDR_PLUGIN_STATE_DIR/closed"
+  close_then_promote_fails
+  chmod 700 "$HERDR_PLUGIN_STATE_DIR/closed"
+}
+
+@test "a closed pane whose push cannot get the stack lock is reported in a notification" {
+  ln -s "$$.$(date +%s).1" "$HERDR_PLUGIN_STATE_DIR/seq.lock"
+  close_then_promote_fails
+}
+
 @test "a snapshot that fails passes the key through, and says so" {
   reply pane_get 1 "$gone_pane"
   run bash "$REPO_ROOT/close.sh" "$pane"

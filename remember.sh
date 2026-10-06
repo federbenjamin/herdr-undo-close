@@ -8,6 +8,7 @@
 #   remember.sh promote <pane>    forgets anything older than $max_age_days, waits up to ~2s for
 #                                 the pane to be gone, then pushes entry.json (entry.jq: the flat
 #                                 contract reopen.sh reads) and scrollback.ansi onto the stack.
+#                                 A push that fails is a notification: nothing reads its output.
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 # shellcheck source=stack.sh
 . "$here/stack.sh"
@@ -60,7 +61,7 @@ case "$cmd" in
       if ! bash "$here/build_entry.sh" "$dir" > "$dir/entry.json" 2>/dev/null; then
         rm -rf "$dir"; exit 0
       fi
-      stack_push "$pane" || { echo "remember: could not put $pane on the stack"; exit 1; }
+      stack_push "$pane" || fail "Close" "Could not remember the closed pane $pane; it cannot be reopened."
       exit 0
     done
     ;;

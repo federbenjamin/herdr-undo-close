@@ -169,6 +169,37 @@ gone_workspace() {
   [ -z "$(stack)" ]
 }
 
+@test "a temporary file reopen cannot make fails the reopen, closes the workspace it made, and keeps the entry" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack. --sound none'
+  [ "$(calls | grep -c '^workspace close w9$')" -eq 1 ]
+  [ "$(calls | grep -c '^plugin pane open')" -eq 0 ]
+  [ "$(stack)" = "0000000001-$pane" ]
+}
+
+@test "a temporary file reopen cannot make, with a workspace it made and cannot close, points the entry there" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(could not make a temporary file); it is back on the stack."* ]]
+  [ "$(jq -r .workspace_id "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json")" = w9 ]
+}
+
+@test "a temporary file reopen cannot make for an overlay fails the reopen and keeps the entry" {
+  stack_plugin acme.tool
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack."* ]]
+  [ "$(calls | grep -c '^workspace')" -eq 0 ]
+  [ "$(stack)" = "0000000001-$pane" ]
+}
+
 @test "a workspace get that fails with another code places the pane as a tab and creates no workspace" {
   stack_plugin acme.tool tiled
   reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
@@ -211,7 +242,8 @@ gone_workspace() {
   run bash "$REPO_ROOT/remember.sh" promote "$pane"
   chmod 700 "$HERDR_PLUGIN_STATE_DIR/closed"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"remember: could not put $pane on the stack" ]]
+  [ "${lines[${#lines[@]}-1]}" = "Could not remember the closed pane $pane; it cannot be reopened." ]
+  calls | grep -qx "notification show Close --body Could not remember the closed pane $pane; it cannot be reopened. --sound none"
   [ -z "$(stack)" ]
 }
 
