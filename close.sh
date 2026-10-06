@@ -8,9 +8,9 @@
 #   anything else (a file viewer, lazygit, a popup) -> herdr closes the pane
 # A snapshot that fails passes the key through: ctrl+d must never do nothing.
 # Usage: close.sh [pane_id]   (pane_id defaults to the focused pane)
-. "$(cd "$(dirname "$0")" && pwd)/lib.sh"
-# shellcheck source=stack.sh
-. "$here/stack.sh"
+. "$(cd "$(dirname "$0")" && pwd)/internal/lib.sh"
+# shellcheck source=internal/stack.sh
+. "$here/internal/stack.sh"
 
 pane="${1:-}"
 if [ -z "$pane" ]; then
@@ -41,11 +41,11 @@ if popup_close 2>/dev/null; then exit 0; fi
 # Remember first: after the key the process may be gone.
 decision=pass
 dir=$(stack_staging "$pane")
-if bash "$here/remember.sh" snapshot "$pane" 2>/dev/null && [ -s "$dir/pane.json" ]; then
+if bash "$here/internal/remember.sh" snapshot "$pane" 2>/dev/null && [ -s "$dir/pane.json" ]; then
   if jq -e '.result.plugin_pane != null' "$dir/plugin.json" >/dev/null 2>&1; then
     decision=close
   elif [ -z "$(jq -r '.result.pane.agent // empty' "$dir/pane.json" 2>/dev/null || true)" ]; then
-    names=$(jq -L "$here" -r 'include "names"; .result.process_info.foreground_processes[]? | pname' "$dir/procs.json" 2>/dev/null || true)
+    names=$(jq -L "$here/internal" -r 'include "names"; .result.process_info.foreground_processes[]? | pname' "$dir/procs.json" 2>/dev/null || true)
     if [ -n "$names" ] && ! printf '%s\n' "$names" | grep -Eq "$passthrough_regex"; then
       decision=close
     fi
@@ -60,4 +60,4 @@ case "$decision" in
 esac
 # Detached: promote waits up to 2s for the pane to vanish, and the next ctrl+d must not queue
 # behind it (Claude Code exits only on two presses within about a second).
-(nohup bash "$here/remember.sh" promote "$pane" >/dev/null 2>&1 &)
+(nohup bash "$here/internal/remember.sh" promote "$pane" >/dev/null 2>&1 &)

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The scripts herdr does not call itself moved into `internal/`; the root keeps `close.sh`, `reopen.sh` and `setup.sh`. No change in behaviour.
 - `ctrl+d` always closes a plugin pane, even when the program in it would take the key itself
   (a shell, an agent). The decision now reads the snapshot taken for the close, so each `ctrl+d`
   makes fewer Herdr calls before the key.

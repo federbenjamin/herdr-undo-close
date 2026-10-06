@@ -29,7 +29,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 
 @test "snapshot saves {} when herdr says no plugin owns the pane, and logs nothing" {
   reply plugin_pane_focus 1 '{"error":{"code":"plugin_pane_not_found","message":"plugin pane not found"},"id":"cli:plugin"}'
-  run bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
   [ "$(cat "$(staged)/plugin.json")" = "{}" ]
@@ -37,7 +37,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 
 @test "snapshot saves herdr's reply for a plugin pane" {
   reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
-  run bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   [ "$status" -eq 0 ]
   jq -e '.result.plugin_pane.plugin_id == "test.overlay"' "$(staged)/plugin.json"
 }
@@ -46,7 +46,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
   mkdir -p "$(staged)"
   echo '{}' > "$(staged)/plugin.json"
   reply plugin_pane_focus 1 '{"error":{"code":"internal_error","message":"socket hiccup in /home/user/secret"},"id":"cli:plugin"}'
-  run bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   [ "$status" -eq 0 ]
   [ "$output" = "remember: plugin pane focus $pane failed (internal_error); not recorded as a plugin pane" ]
   [ ! -e "$(staged)/plugin.json" ]
@@ -55,7 +55,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 
 @test "a plugin pane focus failure with no error code (an older herdr) is logged as such" {
   reply plugin_pane_focus 2 'herdr plugin pane commands:'
-  run bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   [ "$status" -eq 0 ]
   [ "$output" = "remember: plugin pane focus $pane failed (no error code); not recorded as a plugin pane" ]
   [ ! -e "$(staged)/plugin.json" ]
@@ -253,9 +253,9 @@ gone_workspace() {
 
 @test "promote does not push a pane that pane get fails on with another code" {
   reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
-  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   reply pane_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:pane"}'
-  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" promote "$pane"
   [ "$status" -eq 0 ]
   [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/closed" 2>/dev/null)" ]
   [ -f "$(staged)/pane.json" ]
@@ -263,11 +263,11 @@ gone_workspace() {
 
 @test "promote says so and fails when the entry cannot be put on the stack" {
   reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
-  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
   mkdir -p "$HERDR_PLUGIN_STATE_DIR/closed"
   chmod 500 "$HERDR_PLUGIN_STATE_DIR/closed"
-  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  run bash "$REPO_ROOT/internal/remember.sh" promote "$pane"
   chmod 700 "$HERDR_PLUGIN_STATE_DIR/closed"
   [ "$status" -eq 1 ]
   [ "${lines[${#lines[@]}-1]}" = "Could not remember the closed pane $pane; it cannot be reopened." ]

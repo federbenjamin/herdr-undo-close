@@ -37,12 +37,12 @@ jobs:
           jq --version
           shellcheck --version
 
-      # lib.sh and shell-hook.sh are sourced and have no shebang, hence -s bash;
+      # internal/lib.sh and internal/shell-hook.sh are sourced and have no shebang, hence -s bash;
       # scripts/check-deps.sh is /bin/sh and is checked as such.
       - name: shellcheck
         run: |
           shellcheck -x scripts/check-deps.sh
-          shellcheck -x -s bash ./*.sh test/helpers/herdr-guard test/helpers/*.bash test/live/*.bash test/fixtures/*.sh
+          shellcheck -x -s bash ./*.sh internal/*.sh test/helpers/herdr-guard test/helpers/*.bash test/live/*.bash test/fixtures/*.sh
 
       # Each check runs even when an earlier one failed, so one red step never hides another.
       - name: Unit tests

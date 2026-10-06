@@ -39,7 +39,7 @@ run_in() { h pane run "$1" "${@:3}" >/dev/null; wait_fg "$1" "$2"; }
 snap() {
   local name=$1 pane=$2 d="$out/$1" f
   export HERDR_PLUGIN_STATE_DIR="$HOME/state/$name"
-  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  bash "$REPO_ROOT/internal/remember.sh" snapshot "$pane"
   mkdir -p "$d"
   for f in "$HERDR_PLUGIN_STATE_DIR/staging/$pane"/*.json; do
     sed -e "s|$(cd -P "$HOME" && pwd)|/home/user|g" -e "s|$HOME|/home/user|g" "$f" > "$d/${f##*/}"

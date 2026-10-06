@@ -13,9 +13,9 @@
 # first, goes back to the stack if nothing was created (dropped instead when its plugin or
 # entrypoint is gone), and is forgotten by age if the hook never ran. An entry that cannot be
 # read is dropped and the next one is tried.
-. "$(cd "$(dirname "$0")" && pwd)/lib.sh"
-# shellcheck source=stack.sh
-. "$here/stack.sh"
+. "$(cd "$(dirname "$0")" && pwd)/internal/lib.sh"
+# shellcheck source=internal/stack.sh
+. "$here/internal/stack.sh"
 [ -n "$state" ] || fail "Reopen" "HERDR_PLUGIN_STATE_DIR is not set; run this as a herdr plugin action."
 
 entry="" new="" made_ws=""
@@ -139,7 +139,7 @@ case "$kind" in
     rm -rf "$entry"
     ;;
   agent|shell)
-    env=(--env "UNDO_CLOSE_REOPEN=$entry" --env "UNDO_CLOSE_SCRIPT=$here/reopen_entry.sh" --env BASH_SILENCE_DEPRECATION_WARNING=1)
+    env=(--env "UNDO_CLOSE_REOPEN=$entry" --env "UNDO_CLOSE_SCRIPT=$here/internal/reopen_entry.sh" --env BASH_SILENCE_DEPRECATION_WARNING=1)
     case "$place" in
       split)
         new=$("$herdr" pane split --pane "$target" --direction "$direction" --cwd "$cwd" --focus "${env[@]}" 2>/dev/null \

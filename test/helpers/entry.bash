@@ -2,7 +2,7 @@
 
 # build_entry <dir> prints entry.jq's result for the replies in <dir>, through the same
 # build_entry.sh remember.sh's promote runs.
-build_entry() { bash "$REPO_ROOT/build_entry.sh" "$1"; }
+build_entry() { bash "$REPO_ROOT/internal/build_entry.sh" "$1"; }
 
 fx() { echo "$REPO_ROOT/test/fixtures/$1"; }
 pane_of() { jq -r '.result.pane.pane_id' "$(fx "$1")/pane.json"; }
@@ -23,8 +23,8 @@ stack_entry() {
   shift; [ $# -eq 0 ] || shift
   # shellcheck disable=SC2034  # read by stack.sh
   state=$HERDR_PLUGIN_STATE_DIR keep=${keep:-20}
-  # shellcheck source-path=SCRIPTDIR source=../../stack.sh
-  declare -F stack_push >/dev/null || . "$REPO_ROOT/stack.sh"
+  # shellcheck source-path=SCRIPTDIR source=../../internal/stack.sh
+  declare -F stack_push >/dev/null || . "$REPO_ROOT/internal/stack.sh"
   pane=$(jq -r '.result.pane.pane_id' "$dir/pane.json")
   staged=$(stack_staging "$pane")
   mkdir -p "$staged"

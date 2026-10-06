@@ -31,7 +31,7 @@ saved_session() {
 
 @test "prints the scrollback, then the reopened marker" {
   printf 'old output\n' > "$entry/scrollback.ansi"
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [[ "$output" == *"old output"* ]]
   [[ "$output" == *"── reopened by undo-close ──"* ]]
@@ -43,27 +43,27 @@ saved_session() {
 
 @test "an empty scrollback prints no marker" {
   : > "$entry/scrollback.ansi"
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [[ "$output" != *"reopened by undo-close"* ]]
 }
 
 @test "the entry dir is deleted" {
   printf 'x\n' > "$entry/scrollback.ansi"
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ ! -e "$entry" ]
 }
 
 @test "a missing entry dir is not an error" {
-  run bash "$REPO_ROOT/reopen_entry.sh" "$HOME/nope"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$HOME/nope"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
 @test "a missing conversation file starts fresh and names the unsaved Claude session" {
   launch claude abc-123 "$HOME/bin/claude" "--foo"
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/claude-args")" = "--foo" ]
   [[ "$output" == *$'\033[2mundo-close: claude session abc-123 was never saved (no conversation file); starting a fresh claude here.\033[0m'* ]]
@@ -72,7 +72,7 @@ saved_session() {
 @test "a conversation file under the default Claude config: the resume args words, then --resume=<session>" {
   saved_session "$HOME/.claude"
   launch claude abc-123 "$HOME/bin/claude" "--foo --bar=baz"
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [[ "$output" == *"fake claude ran"* ]]
   [[ "$output" != *"never saved"* ]]
@@ -82,7 +82,7 @@ saved_session() {
 @test "claude with no resume args gets only --resume=<session>" {
   saved_session "$HOME/.claude"
   launch claude abc-123 "$HOME/bin/claude" ""
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/claude-args")" = "--resume=abc-123" ]
 }
@@ -90,7 +90,7 @@ saved_session() {
 @test "a conversation file in CLAUDE_CONFIG_DIR resumes that session" {
   saved_session "$HOME/cfg"
   launch claude abc-123 "$HOME/bin/claude" "--foo"
-  run env CLAUDE_CONFIG_DIR="$HOME/cfg" bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run env CLAUDE_CONFIG_DIR="$HOME/cfg" bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/claude-args")" = $'--foo\n--resume=abc-123' ]
 }
@@ -99,7 +99,7 @@ saved_session() {
   saved_session "$HOME/.claude"
   mkdir -p "$HOME/cfg/projects"
   launch claude abc-123 "$HOME/bin/claude" "--foo"
-  run env CLAUDE_CONFIG_DIR="$HOME/cfg" bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run env CLAUDE_CONFIG_DIR="$HOME/cfg" bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/claude-args")" = "--foo" ]
   [[ "$output" == *"never saved"* ]]
@@ -107,7 +107,7 @@ saved_session() {
 
 @test "an unsaved session with empty resume args launches Claude with no arguments" {
   launch claude abc-123 "$HOME/bin/claude" ""
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [ -f "$HOME/claude-args" ]
   [ -z "$(cat "$HOME/claude-args")" ]
@@ -118,7 +118,7 @@ saved_session() {
     mkdir -p "$entry"
     saved_session "$HOME/.claude" "$bad"
     launch claude "$bad" "$HOME/bin/claude" ""
-    run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+    run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
     [ "$status" -eq 0 ]
     [[ "$output" == *"refusing to resume an odd-looking session id."* ]]
     [ ! -e "$HOME/claude-args" ]
@@ -128,7 +128,7 @@ saved_session() {
 @test "an empty claude_bin says claude is not on PATH, even with the conversation file" {
   saved_session "$HOME/.claude"
   launch claude abc-123 "" ""
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [[ "$output" == *"claude is not on PATH; the session abc-123 was not resumed."* ]]
   [ ! -e "$HOME/claude-args" ]
@@ -137,7 +137,7 @@ saved_session() {
 @test "an agent other than claude says there is no resume for it, even with a conversation file" {
   saved_session "$HOME/.claude"
   launch codex abc-123 "$HOME/bin/claude" ""
-  run bash "$REPO_ROOT/reopen_entry.sh" "$entry"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$entry"
   [ "$status" -eq 0 ]
   [[ "$output" == *"no resume for codex; its scrollback is above."* ]]
   [ ! -e "$HOME/claude-args" ]
@@ -156,7 +156,7 @@ saved_session() {
   [ "$status" -eq 0 ]
   e=$(calls | sed -n 's/^pane split .*--env UNDO_CLOSE_REOPEN=\([^ ]*\).*/\1/p')
   [ -f "$e/launch" ]
-  run bash "$REPO_ROOT/reopen_entry.sh" "$e"
+  run bash "$REPO_ROOT/internal/reopen_entry.sh" "$e"
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/claude-args")" = "--resume=abc-123" ]
   [ ! -e "$e" ]
