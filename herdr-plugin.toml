@@ -35,7 +35,7 @@ command = ["bash", "setup.sh", "keys"]
 [[actions]]
 id = "setup-shell"
 title = "undo-close: install the shell hook"
-description = "The hook that replays a reopened pane, as one block at the end of your login profile (~/.bash_profile or ~/.zprofile, backed up first)."
+description = "The hook that replays a reopened pane, as one block at the end of the file your pane shell reads at start (backed up first)."
 contexts = ["workspace", "global"]
 command = ["bash", "setup.sh", "shell"]
 

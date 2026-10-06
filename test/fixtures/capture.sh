@@ -2,8 +2,8 @@
 # Regenerates test/fixtures/ from a real herdr, started headless under a throwaway HOME made by
 # `isolate` (every herdr call goes through test/helpers/herdr-guard). Run it when herdr changes
 # a reply shape:  bash test/fixtures/capture.sh
-# Each fixture dir holds the six replies entry.jq reads, saved by the plugin's own
-# `remember.sh snapshot`, with the throwaway HOME replaced by /home/user.
+# Each fixture dir holds the replies the plugin's own `remember.sh snapshot` saved, with the
+# throwaway HOME replaced by /home/user.
 set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=../helpers/common.bash
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../helpers/common.bash"
@@ -14,31 +14,26 @@ out="$REPO_ROOT/test/fixtures"
 isolate
 trap 'stop_server || true; unisolate || true' EXIT
 start_server
-herdr() { "$HERDR_BIN_PATH" "$@"; }
 mkdir -p "$HOME/proj/sub"
 
 # new_ws <label|""> prints "<pane> <tab> <workspace>" ids of the new workspace's first pane.
 new_ws() {
   local args=(--cwd "$HOME/proj" --no-focus)
   [ -z "$1" ] || args+=(--label "$1")
-  herdr workspace create "${args[@]}" | jq -r '.result | "\(.root_pane.pane_id) \(.tab.tab_id) \(.workspace.workspace_id)"'
+  h workspace create "${args[@]}" | jq -r '.result | "\(.root_pane.pane_id) \(.tab.tab_id) \(.workspace.workspace_id)"'
 }
-split() { herdr pane split "$1" --direction "$2" | jq -r '.result.pane.pane_id'; }
+split() { h pane split "$1" --direction "$2" | jq -r '.result.pane.pane_id'; }
 
 # wait_fg <pane> <marker> waits until herdr shows marker in a foreground process argv of pane.
 wait_fg() {
-  local pane=$1 marker=$2
-  for _ in $(seq 1 40); do
-    herdr pane process-info --pane "$pane" | jq -e --arg m "$marker" \
-      '[.result.process_info.foreground_processes[]?.argv | join(" ")] | any(contains($m))' >/dev/null && return 0
-    sleep 0.25
-  done
-  echo "capture: $marker never showed in $pane's foreground" >&2
-  return 1
+  poll 40 0.25 fg_shows "$1" "$2" || { echo "capture: $2 never showed in $1's foreground" >&2; return 1; }
+}
+fg_shows() {
+  fg_procs "$1" | jq -e --arg m "$2" '[.result.process_info.foreground_processes[]?.argv | join(" ")] | any(contains($m))'
 }
 
 # run_in <pane> <marker> <command...> runs the command and waits for marker (wait_fg).
-run_in() { herdr pane run "$1" "${@:3}" >/dev/null; wait_fg "$1" "$2"; }
+run_in() { h pane run "$1" "${@:3}" >/dev/null; wait_fg "$1" "$2"; }
 
 # snap <name> <pane> saves the pane's replies as test/fixtures/<name>/.
 snap() {
@@ -46,9 +41,8 @@ snap() {
   export HERDR_PLUGIN_STATE_DIR="$HOME/state/$name"
   bash "$REPO_ROOT/remember.sh" snapshot "$pane"
   mkdir -p "$d"
-  for f in pane layout procs tab workspace plugin; do
-    sed -e "s|$(cd -P "$HOME" && pwd)|/home/user|g" -e "s|$HOME|/home/user|g" \
-      "$HERDR_PLUGIN_STATE_DIR/staging/$pane/$f.json" > "$d/$f.json"
+  for f in "$HERDR_PLUGIN_STATE_DIR/staging/$pane"/*.json; do
+    sed -e "s|$(cd -P "$HOME" && pwd)|/home/user|g" -e "s|$HOME|/home/user|g" "$f" > "$d/${f##*/}"
   done
 }
 
@@ -78,7 +72,7 @@ run_in "$p2" "tail -F" tail -F "$HOME/proj/a"
 snap command "$p2"
 
 read -r p1 tab _ <<<"$(new_ws "My workspace")"
-herdr tab rename "$tab" "My tab" >/dev/null
+h tab rename "$tab" "My tab" >/dev/null
 snap labeled "$p1"
 
 # Two plugin panes from local plugins: a file viewer split off a shell, launched with --open,
@@ -88,13 +82,13 @@ link_plugin "$HOME/plugins/viewer" herdr-file-viewer file-viewer split \
 link_plugin "$HOME/plugins/overlay" test.overlay view overlay '["sleep", "1000"]' >/dev/null
 
 read -r p1 _ _ <<<"$(new_ws "")"
-p2=$(herdr plugin pane open --plugin herdr-file-viewer --entrypoint file-viewer --placement split \
+p2=$(h plugin pane open --plugin herdr-file-viewer --entrypoint file-viewer --placement split \
   --target-pane "$p1" --direction right --no-focus | jq -r '.result.plugin_pane.pane.pane_id')
 wait_fg "$p2" "--open"
 snap plugin-split "$p2"
 
-p1=$(herdr workspace create --cwd "$HOME/proj" --focus | jq -r '.result.root_pane.pane_id')
-p2=$(herdr plugin pane open --plugin test.overlay --entrypoint view --placement overlay --focus \
+p1=$(h workspace create --cwd "$HOME/proj" --focus | jq -r '.result.root_pane.pane_id')
+p2=$(h plugin pane open --plugin test.overlay --entrypoint view --placement overlay --focus \
   | jq -r '.result.plugin_pane.pane.pane_id')
 wait_fg "$p2" "sleep 1000"
 snap plugin-overlay "$p2"

@@ -1,4 +1,5 @@
 load ../helpers/common
+load ../helpers/fake-herdr
 
 # setup.sh runs against a temp HOME; its `herdr config check` calls go through the guard to the
 # real herdr, which needs no server for that.
@@ -112,6 +113,37 @@ TOML
   cmp "$config" "$BATS_TEST_TMPDIR/before"
 }
 
+@test "a new config that fails the check leaves the file byte-identical, previous block included" {
+  printf '# mine\n' > "$config"
+  setup_sh keys
+  cp "$config" "$BATS_TEST_TMPDIR/before"
+  fake_herdr
+  # The fake does not see which file a check reads (HERDR_CONFIG_PATH); this wrapper logs it.
+  printf '#!/usr/bin/env bash\necho "${HERDR_CONFIG_PATH-} $*" >> "$HOME/fake/checked"\nexec "$HOME/fake/herdr" "$@"\n' > "$HOME/fake/logged"
+  chmod +x "$HOME/fake/logged"
+  export HERDR_BIN_PATH="$HOME/fake/logged" HERDR_CONFIG_PATH="$config"
+  reply 2 0 ''
+  reply 3 1 'config parse error'
+  run setup_sh keys
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"was not changed"* ]]
+  cmp "$config" "$BATS_TEST_TMPDIR/before"
+  [ ! -e "$config.undo-close-new" ]
+  [ "$(grep ' config check$' "$HOME/fake/checked")" = "$config config check"$'\n'"$config.undo-close-new config check" ]
+}
+
+@test "keys writes through a symlinked config and leaves it a symlink" {
+  mkdir "$HOME/dotfiles"
+  printf '# mine\n' > "$HOME/dotfiles/config.toml"
+  ln -s "$HOME/dotfiles/config.toml" "$config"
+  run setup_sh keys
+  [ "$status" -eq 0 ]
+  [ -L "$config" ]
+  [ "$(head -n 1 "$HOME/dotfiles/config.toml")" = "# mine" ]
+  [ "$(count "^$keys_begin" "$HOME/dotfiles/config.toml")" -eq 1 ]
+  [ ! -e "$config.undo-close-new" ]
+}
+
 @test "the first backup is kept on a second run" {
   printf '# original\n' > "$config"
   setup_sh keys
@@ -222,6 +254,18 @@ TOML
   setup_sh shell
   if [ "$(uname)" = Darwin ]; then expected=.zprofile; else expected=.zshrc; fi
   [ "$(count "^$shell_begin" "$HOME/$expected")" -eq 1 ]
+}
+
+@test "shell: writes through a symlinked profile and leaves it a symlink" {
+  terminal_config /bin/bash login
+  mkdir "$HOME/dotfiles"
+  printf '# my profile\n' > "$HOME/dotfiles/bash_profile"
+  ln -s "$HOME/dotfiles/bash_profile" "$HOME/.bash_profile"
+  run setup_sh shell
+  [ "$status" -eq 0 ]
+  [ -L "$HOME/.bash_profile" ]
+  [ "$(head -n 1 "$HOME/dotfiles/bash_profile")" = "# my profile" ]
+  [ "$(count "^$shell_begin" "$HOME/dotfiles/bash_profile")" -eq 1 ]
 }
 
 @test "shell: a second run replaces the block, still one" {

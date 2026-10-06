@@ -1,26 +1,14 @@
 #!/usr/bin/env bats
-# The live harness's own checks (test/live/live_helpers.bash, test/helpers/live.bash), with a fake
-# herdr at HERDR_BIN_PATH that answers from files: no server, and no call reaches any herdr.
+# The live harness's own checks (test/live/live_helpers.bash, test/helpers/live.bash), against the
+# fake herdr (test/helpers/fake-herdr.bash): no server, and no call reaches any herdr.
 load ../live/live_helpers
+load ../helpers/fake-herdr
 
 setup() {
   isolate
-  mkdir -p "$HOME/fake"
-  # shellcheck disable=SC2016  # the fake's script text, expanded when the fake runs
-  printf '%s\n' '#!/usr/bin/env bash' \
-    'd="$HOME/fake"; n=$(( $(cat "$d/n" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$d/n"' \
-    'echo "$*" >> "$d/calls"; f="$d/$n"; [ -e "$f.rc" ] || f="$d/default"' \
-    'rc=$(cat "$f.rc"); if [ "$rc" = 0 ]; then cat "$f.out"; else cat "$f.out" >&2; fi; exit "$rc"' \
-    > "$HOME/fake/herdr"
-  chmod +x "$HOME/fake/herdr"
-  export HERDR_BIN_PATH="$HOME/fake/herdr"
-  reply default 0 ''
+  fake_herdr
 }
 teardown() { unisolate; }
-
-# reply <call number|default> <exit code> <text>: what the fake herdr answers.
-reply() { printf '%s\n' "$3" > "$HOME/fake/$1.out"; echo "$2" > "$HOME/fake/$1.rc"; }
-calls() { cat "$HOME/fake/calls"; }
 
 @test "stop_server does not count a failing status call as stopped" {
   reply 1 0 ''
