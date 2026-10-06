@@ -132,7 +132,7 @@ case "${1:-}" in
     notify "undo-close" "$msg"
     ;;
   shell)
-    path=$(profile_path) || fail "undo-close: not installed" "The pane shell is neither bash nor zsh; source shell-hook.sh from the file it reads at start."
+    path=$(profile_path) || fail "undo-close: not installed" "The pane shell is neither bash nor zsh; source $here/internal/shell-hook.sh from the file it reads at start."
     [ -f "$path" ] || : > "$path"
     lines=(); while IFS= read -r l; do lines+=("$l"); done < <(hook_lines)
     rest=$(strip_block "$shell_begin" "$shell_end" "$path") || exit 1
