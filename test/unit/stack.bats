@@ -25,12 +25,15 @@ dead_pid() { sh -c 'echo $$'; }
 slow_seq_read() {
   cat() { command cat "$@"; [ "$1" != "$state/seq" ] || sleep 0.3; }
 }
+# bg_push <pane>: stack_push in the background, as promote runs it: set -e but no ERR trap. On
+# bash 3.2, bats' ERR trap ends a background job at any failed command inside a function.
+bg_push() { ( trap - ERR; stack_push "$1" ) & }
 seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
 
 @test "a held seq lock holds the push back until it is released" {
   hold_lock $$
   staged w1:p1
-  stack_push w1:p1 &
+  bg_push w1:p1
   sleep 0.3
   [ ! -e "$state/seq" ]
   [ -z "$(ls "$state/closed" 2>/dev/null)" ]
@@ -57,8 +60,8 @@ seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
   staged w1:p1
   staged w1:p2
   slow_seq_read
-  stack_push w1:p1 & a=$!
-  stack_push w1:p2 & b=$!
+  bg_push w1:p1; a=$!
+  bg_push w1:p2; b=$!
   wait "$a"
   wait "$b"
   [ "$(seqs)" = "0000000001 0000000002 " ]
@@ -89,8 +92,8 @@ seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
   staged w1:p1
   staged w1:p2
   slow_seq_read
-  stack_push w1:p1 & a=$!
-  stack_push w1:p2 & b=$!
+  bg_push w1:p1; a=$!
+  bg_push w1:p2; b=$!
   wait "$a"
   wait "$b"
   [ "$(seqs)" = "0000000001 0000000002 " ]
@@ -102,7 +105,7 @@ seqs() { ls "$state/closed" | cut -c1-10 | sort -u | tr '\n' ' '; }
   run bash -c '
     state=$1 keep=20 max_age_days=7
     . "$2/stack.sh"
-    rm() { if [ "$*" = "-f $state/seq.lock" ]; then kill -9 "$$" "$BASHPID"; fi; command rm "$@"; }
+    rm() { if [ "$*" = "-f $state/seq.lock" ]; then kill -9 "$$"; sh -c '"'"'kill -9 "$PPID"'"'"'; fi; command rm "$@"; }
     stack_push w1:p0' _ "$state" "$REPO_ROOT"
   [ "$status" -eq 137 ]
   [ -e "$state/seq.break" ] || [ -L "$state/seq.break" ]
