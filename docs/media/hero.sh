@@ -67,12 +67,14 @@ wait_for "$left" 'listening on :8080'
 screen() { echo "hero.sh: $1; the Claude pane shows:" >&2; h pane read "$right" --source recent --lines 30 >&2; exit 1; }
 h pane run "$right" claude >/dev/null
 wait_for "$right" '? for shortcuts' 30000 || screen "claude did not reach its prompt"
-session=$(h pane get "$right" | jq -r '.result.pane.agent_session.value // empty')
-[ -n "$session" ] || { echo "hero.sh: herdr reports no Claude session for $right" >&2; exit 1; }
+# Claude's SessionStart hook reports the session to herdr a moment after the prompt draws.
+session_id() { session=$(h pane get "$right" | jq -r '.result.pane.agent_session.value // empty'); [ -n "$session" ]; }
+poll 40 0.25 session_id || screen "herdr reports no Claude session for $right"
 h pane send-text "$right" "Reply with the single word: ready" >/dev/null
 h pane send-keys "$right" enter >/dev/null
-answered() { grep -q '"type":"assistant"' "$HOME/.claude/projects/"*/"$session.jsonl"; }
-poll 120 0.5 answered || screen "claude did not answer within 60s"
+# A rejected login also writes an assistant line (the API error), so wait for the word itself.
+answered() { grep '"type":"assistant"' "$HOME/.claude/projects/"*/"$session.jsonl" | grep -qi '"text":"ready'; }
+poll 120 0.5 answered || screen "claude did not answer 'ready' within 60s (a 401 means the token was rejected)"
 idle() { h pane get "$right" | jq -e '.result.pane.agent_status | IN("idle", "done")'; }
 poll 40 0.25 idle || screen "claude did not go idle after answering"
 
@@ -113,7 +115,7 @@ Sleep 1.5s
 Ctrl+D
 Sleep 0.4s
 Ctrl+D
-Wait+Screen@10s /││[\$] +│/
+Wait+Screen@10s /Resume this session with/
 Sleep 1s
 Ctrl+D
 Sleep 1.5s
