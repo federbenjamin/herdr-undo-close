@@ -60,7 +60,7 @@ case "$cmd" in
       if ! bash "$here/build_entry.sh" "$dir" > "$dir/entry.json" 2>/dev/null; then
         rm -rf "$dir"; exit 0
       fi
-      stack_push "$pane"
+      stack_push "$pane" || { echo "remember: could not put $pane on the stack"; exit 1; }
       exit 0
     done
     ;;

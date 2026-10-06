@@ -7,7 +7,6 @@ load ../helpers/fake-herdr
 setup() {
   isolate
   fake_herdr
-  reply default 0 ''
 }
 teardown() { unisolate; }
 

@@ -25,7 +25,10 @@ trap restore EXIT
 # Pop the newest readable entry. Every field is read as a string (`s`), so the eval below only
 # ever assigns.
 while :; do
-  entry=$(stack_pop) || { notify "Reopen" "Nothing to reopen."; exit 0; }
+  entry=$(stack_pop) || case $? in
+    1) notify "Reopen" "Nothing to reopen."; exit 0 ;;
+    *) fail "Reopen" "Could not take the last closed pane off the stack; it is still there." ;;
+  esac
   ok="" old="" ws="" tab="" kind="" label="" cwd="" tab_label="" ws_label="" sibling="" sib_direction="" sib_side=""
   placement="" plugin_id="" entrypoint="" agent="" session="" open=""
   eval "$(jq -r 'def s: (. // "") | tostring;
@@ -102,10 +105,14 @@ case "$kind" in
         args+=(--placement tab --workspace "$ws") ;;
     esac
     [ -n "$open" ] && args+=(--env "HERDR_FILE_VIEWER_OPEN=$open")
-    out=""
-    if out=$("$herdr" "${args[@]}" 2>&1); then
-      new=$(jq -r '.result.plugin_pane.pane.pane_id // empty' <<<"$out" 2>/dev/null || true)
+    # The reply is read from stdout alone and herdr's error from stderr alone, so a warning on
+    # one stream never spoils the other.
+    reply=$(mktemp "${TMPDIR:-/tmp}/undo-close.XXXXXX")
+    err=""
+    if err=$("$herdr" "${args[@]}" 2>&1 >"$reply"); then
+      new=$(jq -r '.result.plugin_pane.pane.pane_id // empty' "$reply" 2>/dev/null || true)
     fi
+    rm -f "$reply"
     if [ -z "$new" ]; then
       if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1; then
         # The workspace stays, so the entry now names it: the next press opens there, making none.
@@ -115,7 +122,7 @@ case "$kind" in
       fi
       # herdr's own reason. A plugin or entrypoint that is gone never comes back, so its entry
       # is dropped and the next prefix+u reaches the one below; anything else may pass on retry.
-      herdr_error "$out"
+      herdr_error "$err"
       case "$code" in
         plugin_not_found|plugin_pane_not_found)
           rm -rf "$entry"

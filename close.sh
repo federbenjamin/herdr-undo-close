@@ -50,6 +50,8 @@ if bash "$here/remember.sh" snapshot "$pane" 2>/dev/null && [ -s "$dir/pane.json
       decision=close
     fi
   fi
+else
+  echo "close: snapshot of $pane failed; ctrl+d passed through"
 fi
 
 case "$decision" in

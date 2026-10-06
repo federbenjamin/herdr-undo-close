@@ -181,3 +181,84 @@ gone_workspace() {
   [ "$(calls | grep -c '^workspace create')" -eq 0 ]
   [ -z "$(stack)" ]
 }
+
+@test "a sibling that pane get fails on with another code still takes the split" {
+  stack_entry "$(fx plugin-split)"
+  reply pane_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:pane"}'
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w7:p9"}}}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$(calls | grep -c '^plugin pane open .*--placement split --direction right --target-pane w7:p1')" -eq 1 ]
+  [ "$(calls | grep -c '^pane list')" -eq 0 ]
+}
+
+@test "promote does not push a pane that pane get fails on with another code" {
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  reply pane_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:pane"}'
+  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  [ "$status" -eq 0 ]
+  [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/closed" 2>/dev/null)" ]
+  [ -f "$(staged)/pane.json" ]
+}
+
+@test "promote says so and fails when the entry cannot be put on the stack" {
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR/closed"
+  chmod 500 "$HERDR_PLUGIN_STATE_DIR/closed"
+  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  chmod 700 "$HERDR_PLUGIN_STATE_DIR/closed"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"remember: could not put $pane on the stack" ]]
+  [ -z "$(stack)" ]
+}
+
+# noisy_open <stdout|stderr> <line>: herdr also prints <line> on that stream at every plugin pane
+# open, beside its reply.
+noisy_open() {
+  local fd=1
+  [ "$1" = stdout ] || fd=2
+  printf '%s\n' "$2" > "$HOME/fake/noise"
+  printf '#!/usr/bin/env bash\ncase "$*" in "plugin pane open "*) cat "$HOME/fake/noise" >&%s ;; esac\nexec "$HOME/fake/herdr" "$@"\n' "$fd" > "$HOME/fake/noisy"
+  chmod +x "$HOME/fake/noisy"
+  export HERDR_BIN_PATH="$HOME/fake/noisy"
+}
+
+@test "a warning on stderr beside a successful open still reopens the pane" {
+  stack_plugin acme.tool
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w8:p9"}}}}'
+  noisy_open stderr 'warning: a newer herdr is available'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$(stack)" ]
+  [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/reopening")" ]
+}
+
+@test "text on stdout beside a failed open does not hide herdr's error code" {
+  stack_plugin acme.tool
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  noisy_open stdout 'opening acme.tool'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(plugin_not_found: plugin not found); it is dropped from the stack."* ]]
+  [ -z "$(stack)" ]
+}
+
+@test "an empty stack is nothing to reopen" {
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Nothing to reopen." ]
+}
+
+@test "a newest entry that cannot be taken off the stack fails the reopen and stays on top" {
+  stack_plugin acme.tool
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR/reopening/$(stack)/left-over"
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not take the last closed pane off the stack; it is still there."* ]]
+  [[ "$output" != *"Nothing to reopen"* ]]
+  [ "$(stack)" = "0000000001-$pane" ]
+  [ "$(calls | grep -c '^plugin pane open')" -eq 0 ]
+}

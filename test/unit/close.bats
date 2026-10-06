@@ -18,14 +18,17 @@ setup() {
   reply pane_send-keys 0 '{"result":{}}'
   reply pane_close 0 '{"result":{}}'
 }
-# close.sh leaves promote running detached; it polls `pane get` for up to 2 s, so the test HOME
-# goes only once it is done.
+gone_pane='{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+# close.sh leaves promote running detached. Once close.sh is done herdr says the pane is gone, as
+# it does after a close, so promote ends at its first poll; the test HOME goes only after that.
 teardown() {
+  reply pane_get 1 "$gone_pane"
   for _ in {1..40}; do pgrep -f "$REPO_ROOT/remember.sh promote" >/dev/null || break; sleep 0.1; done
   unisolate
 }
 
 not_a_plugin='{"error":{"code":"plugin_pane_not_found","message":"plugin pane not found"},"id":"cli:plugin"}'
+busy='{"error":{"code":"internal_error","message":"busy"},"id":"cli:plugin"}'
 
 @test "a plugin pane is closed even when its program takes ctrl+d" {
   reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
@@ -36,9 +39,38 @@ not_a_plugin='{"error":{"code":"plugin_pane_not_found","message":"plugin pane no
   [ "$(calls | grep -c '^pane send-keys')" -eq 0 ]
 }
 
-@test "a shell pane whose program takes ctrl+d gets the key" {
+@test "a plugin pane is closed even when herdr reports an agent in it" {
+  reply pane_get 0 "$(jq '.result.pane.agent = "claude"' "$fx/pane.json")"
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  reply pane_process-info 0 "$(cat "$(fx lone)/procs.json")"
+  run bash "$REPO_ROOT/close.sh" "$pane"
+  [ "$status" -eq 0 ]
+  calls | grep -qx "pane close $pane"
+  [ "$(calls | grep -c '^pane send-keys')" -eq 0 ]
+}
+
+@test "a shell pane whose program takes ctrl+d gets the key, and close.sh logs nothing" {
   reply plugin_pane_focus 1 "$not_a_plugin"
   reply pane_process-info 0 "$(cat "$(fx lone)/procs.json")"
+  run bash "$REPO_ROOT/close.sh" "$pane"
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+  calls | grep -qx "pane send-keys $pane ctrl+d"
+  [ "$(calls | grep -c '^pane close')" -eq 0 ]
+}
+
+@test "a plugin pane focus that fails with another code leaves the pane judged by its program" {
+  reply plugin_pane_focus 1 "$busy"
+  reply pane_process-info 0 "$(cat "$(fx lone)/procs.json")"
+  run bash "$REPO_ROOT/close.sh" "$pane"
+  [ "$status" -eq 0 ]
+  calls | grep -qx "pane send-keys $pane ctrl+d"
+  [ "$(calls | grep -c '^pane close')" -eq 0 ]
+}
+
+@test "a process-info that fails passes the key through" {
+  reply plugin_pane_focus 1 "$not_a_plugin"
+  reply pane_process-info 1 "$busy"
   run bash "$REPO_ROOT/close.sh" "$pane"
   [ "$status" -eq 0 ]
   calls | grep -qx "pane send-keys $pane ctrl+d"
@@ -54,10 +86,11 @@ not_a_plugin='{"error":{"code":"plugin_pane_not_found","message":"plugin pane no
   [ "$(calls | grep -c '^pane send-keys')" -eq 0 ]
 }
 
-@test "a snapshot that fails passes the key through" {
-  reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+@test "a snapshot that fails passes the key through, and says so" {
+  reply pane_get 1 "$gone_pane"
   run bash "$REPO_ROOT/close.sh" "$pane"
   [ "$status" -eq 0 ]
+  [ "$output" = "close: snapshot of $pane failed; ctrl+d passed through" ]
   calls | grep -qx "pane send-keys $pane ctrl+d"
   [ "$(calls | grep -c '^pane close')" -eq 0 ]
 }
