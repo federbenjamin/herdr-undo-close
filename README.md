@@ -1,6 +1,6 @@
 # herdr-undo-close
 
-<p align="center"><strong>Undo close for Herdr panes: ctrl+d closes a pane and remembers it, prefix+u reopens it in its old spot with scrollback</strong></p>
+<p align="center"><strong>Reopen the pane you just closed in Herdr: same split, same scrollback, Claude Code conversation included</strong></p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/federbenjamin/herdr-undo-close" alt="License"></a>
@@ -11,48 +11,58 @@
 
 <p align="center"><img src="docs/media/hero.png" alt="A Herdr split whose right pane was closed while it ran tail -f app.log and reopened: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt" width="720"></p>
 
-A [Herdr](https://herdr.dev) plugin for anyone who has closed a pane and wanted it back. Close a
-pane with `ctrl+d`, get it back with `prefix+u`: same spot, same scrollback, and a Claude Code
-pane picks up its conversation where it left off.
+A plugin for [Herdr](https://herdr.dev), the terminal multiplexer for running coding agents side
+by side. It is undo for a closed pane, like reopening a closed browser tab: close a pane with
+`ctrl+d`, press `prefix+u` (`prefix` is Herdr's command key, `ctrl+b` unless you changed it),
+and the pane is back in the same split with its old output above a fresh prompt. A Claude Code
+pane resumes its conversation. A command that was running comes back typed at the prompt, never
+run.
 
 ## Features
 
-- **`ctrl+d` closes anything.** A shell, a REPL, Claude Code, vim or less get the key and exit on
-  their own terms; a pane that would ignore it, such as a file viewer or lazygit, is closed by
-  Herdr. Either way the pane is remembered first.
-- **`prefix+u` brings it back where it was.** Same split, same side, its old output above a fresh
-  prompt, and the pane closed before it one press later.
-- **A Claude Code pane resumes its conversation.** It reopens with `claude --resume` into the same
-  session.
-- **A running command comes back typed, not run.** A pane that ran `tail -f app.log` reopens with
-  its output and that command waiting at the prompt.
-- **Plugin panes, tabs and workspaces come back too.** A file viewer or an overlay reopens as the
-  same plugin pane; the last pane of a tab or workspace brings that tab or workspace back with it.
+- **Close as you always have, remembered first.** `ctrl+d` still reaches a shell, a REPL or
+  Claude Code, which exit as usual. A pane that would ignore the key, such as a file viewer or
+  lazygit, is closed by Herdr. Either way the pane is saved before it goes.
+- **`prefix+u` puts it back where it was.** Same split, same side, its old output above a fresh
+  prompt. Press it again for the pane closed before that.
+- **A Claude Code pane picks up its conversation.** It reopens with `claude --resume` into the
+  same session.
+- **Your last command comes back typed, not run.** A pane that ran `tail -f app.log` reopens with
+  its output and that command waiting at the prompt. Nothing re-executes.
+- **Tabs, workspaces and plugin panes too.** Close the last pane of a tab or workspace and
+  `prefix+u` brings the tab or workspace back; a plugin pane such as the file viewer reopens as
+  the same plugin pane.
 
 ## Install
 
-You need Herdr 0.9+ and `jq`, on macOS or Linux.
+You need Herdr 0.9+ and `jq`, on macOS or Linux. `python3` is optional; it is used to dismiss a
+popup.
 
 ```sh
 herdr plugin install federbenjamin/herdr-undo-close
-herdr plugin action invoke setup-keys --plugin herdr-undo-close
-herdr plugin action invoke setup-shell --plugin herdr-undo-close
+herdr plugin action invoke setup-keys --plugin herdr-undo-close    # ctrl+d closes, prefix+u reopens
+herdr plugin action invoke setup-shell --plugin herdr-undo-close   # replays a reopened pane's scrollback
+herdr integration install claude                                   # optional: lets a Claude Code pane resume
 ```
 
-`setup-keys` binds `ctrl+d` to close and `prefix+u` to reopen (`prefix` is Herdr's command key,
-`ctrl+b` unless you changed it). `setup-shell` adds a few lines to the end of the file your
-pane shell reads at start (`~/.bash_profile` or `~/.zprofile` on macOS, `~/.bashrc` or
-`~/.zshrc` on Linux); a reopened pane needs them to replay its scrollback before the first
-prompt. Both write one marked block, keep a backup of the original file, and have a
-`remove-keys` / `remove-shell` twin. A key you already use is left alone.
+Each `invoke` prints only that it started; the result arrives as a Herdr notification and in
+`herdr plugin log list --plugin herdr-undo-close`. Then try it: open a new pane, run `echo hi`,
+press `ctrl+d`, then `prefix+u`. The pane comes back with `hi` above a fresh prompt.
 
-An action reports through a Herdr notification and `herdr plugin log list --plugin
-herdr-undo-close`; `invoke` itself prints only that it started.
-
-For Claude Code resume, Herdr must know the session: `herdr integration install claude` once.
+What the two setup actions do: `setup-keys` binds `ctrl+d` and `prefix+u` in your Herdr config.
+A key you already use is left alone and the notification says so; bind `herdr-undo-close.close`
+and `herdr-undo-close.reopen` yourself instead. `setup-shell` adds a few lines to the end of the
+file your pane shell reads at start (`~/.bash_profile` or `~/.zprofile` on macOS, `~/.bashrc`
+or `~/.zshrc` on Linux); a reopened pane needs them to replay its scrollback before the first
+prompt. Panes opened after it pick the lines up; panes already open do not. Both actions write
+one marked block, keep a backup of the original file, and have a `remove-keys` /
+`remove-shell` twin.
 
 Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
 `herdr plugin uninstall herdr-undo-close`.
+
+Not working? Read `herdr plugin log list --plugin herdr-undo-close`, then
+[open an issue](https://github.com/federbenjamin/herdr-undo-close/issues).
 
 ## Usage
 
@@ -61,39 +71,36 @@ Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` fir
 | `ctrl+d` | `herdr-undo-close.close` | closes the focused pane and remembers it; a popup is just dismissed |
 | `prefix+u` | `herdr-undo-close.reopen` | reopens the last closed pane |
 
-What `prefix+u` brings back:
+| you close | `prefix+u` brings back |
+| --- | --- |
+| a shell pane | the same split and side, old output above a fresh prompt |
+| a Claude Code pane | the same split, old output, then `claude --resume` into that session |
+| a Claude Code pane that never got a message | the same split and old output, then a fresh `claude` in that folder, after a dim line saying the session was never saved |
+| a pane running `tail -f app.log` | the same split, old output, and `tail -f app.log` typed at the prompt for you to press Enter |
+| a plugin pane (the file viewer, an overlay such as clauth) | the same plugin pane, in its old spot: over the pane you are in, or as a split or tab |
+| the last pane of a tab or workspace | the tab, or the workspace, with the pane in it |
 
-```
-close a shell pane        →  same split, same side, old output above a fresh prompt
-close a Claude Code pane  →  same split, old output, then `claude --resume` into that session
-close a Claude Code pane  →  same split, old output, then a fresh claude in that folder, with a
-  that never got a message   note
-close a pane running      →  same split, old output, and `tail -f app.log` typed at the
-  `tail -f app.log`          prompt for you to press Enter
-close a plugin pane       →  the same plugin pane: an overlay over the pane you are in, a split
-  (file viewer, clauth)      or tab back in its spot
-close the last pane of    →  the tab, or the workspace, comes back with it
-  a tab or workspace
-```
-
-Press it again for the pane closed before that. How many are kept, and for how long: `keep` and `max_age_days` under Configuration.
+Press it again for the pane closed before that. The last 20 panes are kept for 7 days; change
+that with `keep` and `max_age_days` under [Configuration](#configuration).
 
 What it cannot do: bring back a process. The old `tail -f` is gone; you get its output and its
-command line. A pane closed some other way (`exit`, a crash, Herdr's close-tab key) is not
-remembered.
+command line. In vim, less and other programs that take `ctrl+d` themselves, the key does what
+it always did there, so that pane is not closed. A pane closed some other way (`exit`, a crash,
+Herdr's close-tab key) is not remembered.
 
 ## Configuration
 
-Optional. Copy a line from `config.example` into the file `herdr plugin config-dir
-herdr-undo-close` points at, named `config`, and change it. It is sourced as shell.
+Optional. `herdr plugin config-dir herdr-undo-close` prints a directory; create a file there
+named `config` with `name=value` lines, shell syntax. [`config.example`](config.example) lists
+every setting with its default.
 
-| setting | default | |
+| setting | default | what it does |
 | --- | --- | --- |
-| `claude_resume_args` | none | flags for `claude --resume`, e.g. `"--permission-mode auto"` |
-| `passthrough_regex` | shells, REPLs, agents, pagers, editors | programs that get `ctrl+d` instead of being closed |
+| `claude_resume_args` | none | flags added to `claude --resume`, e.g. `"--permission-mode auto"` |
+| `passthrough_regex` | shells, REPLs, agents, pagers, editors | programs that get `ctrl+d` themselves instead of being closed |
 | `keep` | 20 | panes remembered |
 | `max_age_days` | 7 | days before a remembered pane is forgotten |
-| `agent_minutes` | 10 | how long after Claude exits a close of that pane still reopens as Claude |
+| `agent_minutes` | 10 | minutes after Claude exits during which closing that pane still reopens it as Claude |
 
 Prefer your own keys? Skip `setup-keys` and bind `herdr-undo-close.close` and
 `herdr-undo-close.reopen` yourself.
@@ -102,10 +109,11 @@ Prefer your own keys? Skip `setup-keys` and bind `herdr-undo-close.close` and
 
 - A remembered pane's scrollback is written to disk, readable by you only, under
   `~/.local/state/herdr/plugins/herdr-undo-close/`, until it is reopened, pushed out by `keep`
-  newer closes, or `max_age_days` old. Delete the directory any time.
+  newer closes, or `max_age_days` old. Delete the directory any time. Nothing leaves your
+  machine.
 - A pane that was alone in its tab or workspace reopens as a new tab or workspace in the
-  background: you stay where you are. A focus that a script asks Herdr for moves every attached
-  Herdr window, so a reopen never takes one.
+  background: you stay where you are. A reopen never moves your focus, because a focus asked
+  for by a script would move every attached Herdr window.
 - The typed-back command is never run for you, and is not typed at all if it contains a
   control character.
 - Closing a popup needs `python3`; without it the key goes to the pane under the popup.
@@ -127,25 +135,15 @@ problem privately, as the
 requests are welcome; [CONTRIBUTING](https://github.com/federbenjamin/.github/blob/main/CONTRIBUTING.md)
 says how.
 
-Two test layers, on [bats-core](https://github.com/bats-core/bats-core). You need Herdr 0.9+,
-`jq` and bats-core; the zsh case is skipped when `zsh` is not installed.
+Tests are on [bats-core](https://github.com/bats-core/bats-core) and need Herdr 0.9+ and `jq`:
 
 ```sh
-bats test/unit   # entry.jq, close.sh, remember.sh, reopen.sh, reopen_entry.sh, setup.sh and the live harness's own checks, against saved Herdr replies and a fake herdr; no server
-bats test/live   # close.sh and reopen.sh against a real headless Herdr, one server per file
+bats test/unit   # against saved Herdr replies and a fake herdr; no server
+bats test/live   # against a real headless Herdr, one server per file
 ```
 
-The tests never touch your own Herdr, even when run from inside a Herdr pane. Each unit test,
-and each live file (its tests share one server), gets a temporary HOME under `/tmp`, with every
-`HERDR_*` and `XDG_*` variable removed, and every Herdr call, the plugin's included, goes
-through `test/helpers/herdr-guard`, which refuses any call that could reach a server outside
-that HOME. A refused call fails the unit test that made it, or, in a live file, the file's
-teardown. The one call that skips Herdr, `close.sh`'s popup check, needs `HERDR_SOCKET_PATH`,
-which the tests remove, so it makes no connection.
-
-`test/fixtures/capture.sh` re-captures the saved replies from an isolated server, for a new
-Herdr version. `docs/media/hero.sh` re-takes the picture above the same way (it needs `vhs`). CI
-(`.github/workflows/test.yml`) runs shellcheck and both layers on Ubuntu and macOS.
+They never touch your own Herdr, even when run from inside a Herdr pane. How the isolation
+works, re-capturing fixtures and the hero picture, and CI: [docs/testing.md](docs/testing.md).
 
 ## License
 
