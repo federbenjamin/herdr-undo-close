@@ -7,9 +7,10 @@
 # Needs herdr, jq, claude, and vhs (with ttyd). Makes one live model call (haiku).
 # Runs under the tests' isolation (test/helpers/common.bash `isolate`): a temporary HOME, every
 # herdr call through test/helpers/herdr-guard, and its own headless server, stopped at the end.
-# The temporary HOME has no Claude Code login, so export CLAUDE_CODE_OAUTH_TOKEN first (from
-# `claude setup-token`, read without echo: `read -rs CLAUDE_CODE_OAUTH_TOKEN; export
-# CLAUDE_CODE_OAUTH_TOKEN`); nothing is written to disk.
+# Claude Code runs on your own login: a `claude` wrapper first on the panes' PATH runs the real
+# claude with your HOME but only the demo's settings (--setting-sources local --settings), so your
+# hooks, status line and plugins stay out of the picture. The demo session's transcript folder is
+# deleted at the end.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source-path=SCRIPTDIR source=../../test/helpers/common.bash
@@ -18,32 +19,48 @@ here=$(cd "$(dirname "$0")" && pwd)
 . "$REPO_ROOT/test/helpers/live.bash"
 out="$here/hero.gif"
 claude_bin=$(command -v claude) || { echo "hero.sh: claude is not on PATH" >&2; exit 1; }
+real_home=$HOME
+session=""
 
-# HOME resolved (on macOS /tmp is a link), so Claude Code shows the demo folder as ~/demo.
+# HOME resolved (on macOS /tmp is a link), so herdr and Claude Code agree on the demo folder's path.
 UNDO_CLOSE_TEST_TMP=$(cd -P /tmp && pwd)
 export UNDO_CLOSE_TEST_TMP
 isolate
-trap 'stop_server || true; unisolate || true' EXIT
+# The demo session's folder in your ~/.claude/projects, removed only when named for the demo folder.
+forget_session() {
+  local f
+  [ -n "$session" ] || return 0
+  for f in "$real_home/.claude/projects/"*/"$session.jsonl"; do
+    case "$(basename "$(dirname "$f")")" in *-uc-??????-demo) rm -rf -- "$(dirname "$f")" ;; esac
+  done
+}
+trap 'stop_server || true; forget_session; unisolate || true' EXIT
 # A Claude Code session that started this script marks its children as its own; a claude that
 # inherits the marks saves no transcript, so there would be nothing to resume.
 for v in $(compgen -e); do
-  case "$v" in CLAUDE_CODE_OAUTH_TOKEN) ;; CLAUDECODE|CLAUDE_*) unset "$v" ;; esac
+  case "$v" in CLAUDECODE|CLAUDE_*) unset "$v" ;; esac
 done
 export BASH_SILENCE_DEPRECATION_WARNING=1
-mkdir -p "$HOME/.config/herdr" "$HOME/demo/src" "$HOME/demo/test" "$HOME/.claude"
+mkdir -p "$HOME/.config/herdr" "$HOME/demo/src" "$HOME/demo/test" "$HOME/bin" "$HOME/.claude"
 touch "$HOME/demo/README.md"
 printf '%s\n' '12:04:31 server starting' '12:04:31 config loaded (3 routes)' '12:04:32 listening on :8080' \
   '12:04:40 GET /health 200 2ms' '12:04:52 GET /api/items 200 14ms' > "$HOME/demo/app.log"
 printf '[terminal]\ndefault_shell = "%s"\nshell_mode = "login"\n' "$(command -v bash)" > "$HOME/.config/herdr/config.toml"
-printf "PS1='\$ '\n" > "$HOME/.bash_profile"
-# Claude Code: past its first-run screens, the demo folder trusted, the cheapest model.
-jq -n --arg demo "$HOME/demo" '{hasCompletedOnboarding: true, theme: "dark",
-  projects: {($demo): {hasTrustDialogAccepted: true}}}' > "$HOME/.claude.json"
-echo '{"model": "haiku"}' > "$HOME/.claude/settings.json"
-"$claude_bin" auth status >/dev/null 2>&1 || {
-  echo "hero.sh: claude is not logged in under the temporary HOME; export CLAUDE_CODE_OAUTH_TOKEN (see the header)" >&2
-  exit 1
-}
+# The reopened pane looks for the session file under CLAUDE_CONFIG_DIR, so it names your folder.
+printf "PS1='\$ '\nexport PATH=\"\$HOME/bin:\$PATH\"\nexport CLAUDE_CONFIG_DIR=%q\n" "$real_home/.claude" > "$HOME/.bash_profile"
+# The demo's Claude settings: the cheapest model, and herdr's session hook (installed below by
+# `integration install claude`) so herdr knows which session to resume.
+jq -n --arg hook "$HOME/.claude/hooks/herdr-agent-state.sh" '{model: "haiku",
+  hooks: {SessionStart: [{matcher: "^(startup|resume|clear|compact|fork)$",
+    hooks: [{type: "command", command: ("bash " + ($hook | @sh) + " session"), timeout: 10}]}]}}' \
+  > "$HOME/claude-settings.json"
+cat > "$HOME/bin/claude" <<SHIM
+#!/bin/sh
+exec env -u CLAUDE_CONFIG_DIR HOME="$real_home" DISABLE_AUTOUPDATER=1 "$claude_bin" --setting-sources local --settings "$HOME/claude-settings.json" "\$@"
+SHIM
+chmod +x "$HOME/bin/claude"
+# reopen.sh finds claude on the server's PATH, so the server starts with the wrapper first on it.
+export PATH="$HOME/bin:$PATH"
 start_server
 h() { "$HERDR_BIN_PATH" "$@"; }
 h plugin link "$REPO_ROOT" >/dev/null
@@ -66,15 +83,26 @@ wait_for "$left" 'listening on :8080'
 # One exchange, so the session has a conversation file to resume.
 screen() { echo "hero.sh: $1; the Claude pane shows:" >&2; h pane read "$right" --source recent --lines 30 >&2; exit 1; }
 h pane run "$right" claude >/dev/null
-wait_for "$right" '? for shortcuts' 30000 || screen "claude did not reach its prompt"
+# A new folder gets Claude's trust question first, defaulting to "No, exit": pick yes, once.
+trusted=0
+ready() {
+  local out
+  out=$(h pane read "$right" --source recent --lines 40 2>/dev/null) || return 1
+  case "$out" in *"for shortcuts"*) return 0 ;; esac
+  case "$trusted:$out" in 0:*"Yes, I trust this folder"*)
+    trusted=1; h pane send-keys "$right" down >/dev/null; h pane send-keys "$right" enter >/dev/null ;;
+  esac
+  return 1
+}
+poll 120 0.25 ready || screen "claude did not reach its prompt"
 # Claude's SessionStart hook reports the session to herdr a moment after the prompt draws.
 session_id() { session=$(h pane get "$right" | jq -r '.result.pane.agent_session.value // empty'); [ -n "$session" ]; }
 poll 40 0.25 session_id || screen "herdr reports no Claude session for $right"
 h pane send-text "$right" "Reply with the single word: ready" >/dev/null
 h pane send-keys "$right" enter >/dev/null
 # A rejected login also writes an assistant line (the API error), so wait for the word itself.
-answered() { grep '"type":"assistant"' "$HOME/.claude/projects/"*/"$session.jsonl" | grep -qi '"text":"ready'; }
-poll 120 0.5 answered || screen "claude did not answer 'ready' within 60s (a 401 means the token was rejected)"
+answered() { grep '"type":"assistant"' "$real_home/.claude/projects/"*/"$session.jsonl" | grep -qi '"text":"ready'; }
+poll 120 0.5 answered || screen "claude did not answer 'ready' within 60s"
 idle() { h pane get "$right" | jq -e '.result.pane.agent_status | IN("idle", "done")'; }
 poll 40 0.25 idle || screen "claude did not go idle after answering"
 

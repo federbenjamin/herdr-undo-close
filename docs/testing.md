@@ -17,6 +17,5 @@ teardown. The one call that skips Herdr, `close.sh`'s popup check, needs `HERDR_
 which the tests remove, so it makes no connection.
 
 `test/fixtures/capture.sh` re-captures the saved replies from an isolated server, for a new
-Herdr version. `media/hero.sh` re-takes the README picture the same way (it needs `vhs`, and `claude` with a
-`CLAUDE_CODE_OAUTH_TOKEN` exported, as its header says). CI
+Herdr version. `media/hero.sh` re-takes the README picture the same way (it needs `vhs`, and `claude` logged in, as its header says). CI
 (`../.github/workflows/test.yml`) runs shellcheck and both layers on Ubuntu and macOS.
