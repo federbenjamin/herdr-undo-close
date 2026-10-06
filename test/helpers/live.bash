@@ -2,23 +2,39 @@
 # tests and by test/fixtures/capture.sh, so plain bash: each function returns non-zero with a
 # message on stderr instead of using bats helpers.
 
+h() { "$HERDR_BIN_PATH" "$@"; }
+
+# poll <tries> <seconds> <cmd...>: runs <cmd> until it succeeds, up to <tries> times, <seconds>
+# apart. Prints nothing; a check that needs a pipe is a function.
+poll() {
+  local tries=$1 pause=$2 i; shift 2
+  for ((i = 1; i <= tries; i++)); do
+    "$@" >/dev/null 2>&1 && return 0
+    [ "$i" -eq "$tries" ] || sleep "$pause"
+  done
+  return 1
+}
+
+# fg_procs <pane>: herdr's process-info reply for the pane; fails when the call does.
+fg_procs() { h pane process-info --pane "$1"; }
+
+server_running() { h status server 2>/dev/null | grep -q '^status: running'; }
+
+# Sets out (stop_server's), the last answer, for the failure message.
+server_stopped() { out=$(h status server 2>&1) && grep -qx 'status: not running' <<<"$out"; }
+
 # Starts `herdr server`, waits until it answers, and checks its socket is under the test HOME
 # (both sides resolved: on macOS /tmp is a link to /private/tmp).
 start_server() {
-  local sock="" home_real
+  local sock home_real
   (nohup "$HERDR_BIN_PATH" server > "$HOME/server.log" 2>&1 &)
-  for _ in $(seq 1 40); do
-    if "$HERDR_BIN_PATH" status server 2>/dev/null | grep -q '^status: running'; then
-      sock=$("$HERDR_BIN_PATH" status server 2>/dev/null | sed -n 's/^socket: //p')
-      break
-    fi
-    sleep 0.25
-  done
-  if [ -z "$sock" ]; then
+  poll 40 0.25 server_running || {
     echo "start_server: herdr server did not answer; its log:" >&2
     cat "$HOME/server.log" >&2
     return 1
-  fi
+  }
+  sock=$(h status server 2>/dev/null | sed -n 's/^socket: //p')
+  [ -n "$sock" ] || { echo "start_server: status server names no socket" >&2; return 1; }
   home_real=$(cd -P "$HOME" && pwd)
   case "$(cd -P "$(dirname "$sock")" && pwd)/" in
     "$home_real"/*) ;;
@@ -30,13 +46,8 @@ start_server() {
 # removed. A failing `status` call is not an answer, so it never counts as stopped.
 stop_server() {
   local out=""
-  "$HERDR_BIN_PATH" server stop >/dev/null 2>&1 || true
-  for _ in $(seq 1 40); do
-    if out=$("$HERDR_BIN_PATH" status server 2>&1) && grep -qx 'status: not running' <<<"$out"; then
-      return 0
-    fi
-    sleep 0.25
-  done
+  h server stop >/dev/null 2>&1 || true
+  poll 40 0.25 server_stopped && return 0
   echo "stop_server: herdr server not confirmed stopped; status server said: $out" >&2
   return 1
 }
@@ -59,5 +70,5 @@ title = "$pane"
 placement = "$placement"
 command = $command
 TOML
-  "$HERDR_BIN_PATH" plugin link "$dir"
+  h plugin link "$dir"
 }

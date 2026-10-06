@@ -47,7 +47,7 @@ close the last pane of    →  the tab, or the workspace, comes back with it
   a tab or workspace
 ```
 
-Press it again for the pane closed before that. The last 20 are kept, for 7 days.
+Press it again for the pane closed before that. How many are kept, and for how long: `keep` and `max_age_days` under Configuration.
 
 What it cannot do: bring back a process. The old `tail -f` is gone; you get its output and its
 command line. A pane closed some other way (`exit`, a crash, Herdr's close-tab key) is not
@@ -56,8 +56,8 @@ remembered.
 ## Good to know
 
 - A remembered pane's scrollback is written to disk, readable by you only, under
-  `~/.local/state/herdr/plugins/herdr-undo-close/`, until it is reopened, pushed out by 20
-  newer closes, or 7 days old. Delete the directory any time.
+  `~/.local/state/herdr/plugins/herdr-undo-close/`, until it is reopened, pushed out by `keep`
+  newer closes, or `max_age_days` old. Delete the directory any time.
 - A pane that was alone in its tab or workspace reopens as a new tab or workspace in the
   background: you stay where you are. A focus that a script asks Herdr for moves every attached
   Herdr window, so a reopen never takes one.
@@ -97,7 +97,7 @@ Two test layers, on [bats-core](https://github.com/bats-core/bats-core). You nee
 `jq` and bats-core; the zsh case is skipped when `zsh` is not installed.
 
 ```sh
-bats test/unit   # entry.jq, reopen_entry.sh and setup.sh, against saved Herdr replies; no server
+bats test/unit   # entry.jq, close.sh, remember.sh, reopen.sh, reopen_entry.sh, setup.sh and the live harness's own checks, against saved Herdr replies and a fake herdr; no server
 bats test/live   # close.sh and reopen.sh against a real headless Herdr, one server per file
 ```
 
@@ -106,8 +106,8 @@ and each live file (its tests share one server), gets a temporary HOME under `/t
 `HERDR_*` and `XDG_*` variable removed, and every Herdr call, the plugin's included, goes
 through `test/helpers/herdr-guard`, which refuses any call that could reach a server outside
 that HOME. A refused call fails the unit test that made it, or, in a live file, the file's
-teardown. The one call that skips Herdr, `close.sh`'s popup check, opens the socket under the
-temporary HOME.
+teardown. The one call that skips Herdr, `close.sh`'s popup check, needs `HERDR_SOCKET_PATH`,
+which the tests remove, so it makes no connection.
 
 `test/fixtures/capture.sh` re-captures the saved replies from an isolated server, for a new
 Herdr version. CI (`.github/workflows/test.yml`) runs shellcheck and both layers on Ubuntu and

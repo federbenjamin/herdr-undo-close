@@ -12,10 +12,7 @@ setup() { live_setup; }
 teardown() { live_teardown; }
 
 @test "a closed overlay plugin pane reopens as the same overlay, zoomed over the root pane" {
-  r=$(h workspace create --cwd "$HOME" --focus)
-  TEST_WS=$(printf '%s' "$r" | jq -r '.result.workspace.workspace_id')
-  ROOT_PANE=$(printf '%s' "$r" | jq -r '.result.root_pane.pane_id')
-  wait_for "$ROOT_PANE" "$PROMPT_MARK"
+  new_workspace --focus
   ov=$(h plugin pane open --plugin test.overlay --entrypoint view --placement overlay --focus \
     | jq -r '.result.plugin_pane.pane.pane_id')
   [ -n "$ov" ]
@@ -34,11 +31,13 @@ teardown() { live_teardown; }
   sp=$(h plugin pane open --plugin test.overlay --entrypoint view --placement split \
     --target-pane "$ROOT_PANE" --direction right --no-focus | jq -r '.result.plugin_pane.pane.pane_id')
   [ -n "$sp" ]
+  h pane rename "$sp" uc-plug >/dev/null
   close_pane "$sp"
 
   new=$(reopen_pane)
 
   h plugin pane focus "$new" >/dev/null
+  [ "$(pane_field "$new" label)" = uc-plug ]
   [ "$(pane_field "$new" tab_id)" = "$(pane_field "$ROOT_PANE" tab_id)" ]
   [ "$(rect "$new" x)" -gt "$(rect "$ROOT_PANE" x)" ]
   h pane layout --pane "$new" | jq -e '.result.layout.zoomed == false'

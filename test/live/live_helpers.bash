@@ -63,11 +63,11 @@ live_teardown() {
   [ -z "$TEST_WS" ] || "$HERDR_BIN_PATH" workspace close "$TEST_WS" >/dev/null 2>&1 || true
 }
 
-h() { "$HERDR_BIN_PATH" "$@"; }
-
-# new_workspace [label]: sets TEST_WS and ROOT_PANE, and waits for the root pane's prompt.
+# new_workspace [--focus] [label]: sets TEST_WS and ROOT_PANE, and waits for the root pane's
+# prompt. Not focused unless --focus.
 new_workspace() {
   local r args=(--cwd "$HOME" --no-focus)
+  if [ "${1:-}" = --focus ]; then args=(--cwd "$HOME" --focus); shift; fi
   [ -z "${1:-}" ] || args+=(--label "$1")
   r=$(h workspace create "${args[@]}") || return 1
   TEST_WS=$(printf '%s' "$r" | jq -r '.result.workspace.workspace_id')
@@ -116,9 +116,9 @@ not_found() {
 # <name>. A failed or unparsed process-info call fails here instead of reading as "not running".
 not_running() {
   local out
-  out=$(h pane process-info --pane "$1") || return 1
-  printf '%s' "$out" | jq -e --arg n "$2" '.result.process_info.foreground_processes
-    | type == "array" and (any(.[]; (.argv[0] // "" | split("/") | last) == $n) | not)' >/dev/null
+  out=$(fg_procs "$1") || return 1
+  printf '%s' "$out" | jq -L "$REPO_ROOT" -e --arg n "$2" 'include "names"; .result.process_info.foreground_processes
+    | type == "array" and (any(.[]; pname == $n) | not)' >/dev/null
 }
 
 # close_pane <pane>: close.sh on an open pane, then wait until herdr reports the pane not found
@@ -126,16 +126,13 @@ not_running() {
 close_pane() {
   h pane get "$1" >/dev/null || { echo "close_pane: $1 is not an open pane" >&2; return 1; }
   bash "$REPO_ROOT/close.sh" "$1" || return 1
-  for _ in $(seq 1 60); do
-    if not_found pane "$1" 2>/dev/null && compgen -G "$HERDR_PLUGIN_STATE_DIR/closed/*/entry.json" >/dev/null; then
-      return 0
-    fi
-    sleep 0.1
-  done
+  poll 60 0.1 closed_and_stacked "$1" && return 0
   not_found pane "$1" || true
   echo "close_pane: $1 not reported gone, or no entry, after 6s" >&2
   return 1
 }
+
+closed_and_stacked() { not_found pane "$1" && compgen -G "$HERDR_PLUGIN_STATE_DIR/closed/*/entry.json" >/dev/null; }
 
 # reopen_pane: reopen.sh, then print the one pane that is new since the call.
 reopen_pane() {
@@ -177,12 +174,11 @@ last_line() {
 # wait_last_line <pane> <suffix>: prints the last line once it ends with <suffix> (the replayed
 # scrollback can hold the same text higher up, so wait_for alone cannot tell).
 wait_last_line() {
-  local l
-  for _ in $(seq 1 50); do
-    l=$(last_line "$1")
-    case "$l" in *"$2") printf '%s' "$l"; return 0 ;; esac
-    sleep 0.1
-  done
+  local l=""
+  poll 50 0.1 last_line_ends "$1" "$2" && { printf '%s' "$l"; return 0; }
   echo "wait_last_line: $1 ends with '$l', not '$2'" >&2
   return 1
 }
+
+# Sets l (wait_last_line's), the last line read.
+last_line_ends() { l=$(last_line "$1"); case "$l" in *"$2") return 0 ;; esac; return 1; }

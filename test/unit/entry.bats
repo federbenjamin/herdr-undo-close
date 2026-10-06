@@ -1,17 +1,8 @@
 load ../helpers/common
+load ../helpers/entry
 
 setup() { isolate; }
 teardown() { unisolate; }
-
-# build_entry <dir> prints entry.jq's result for the replies in <dir>, through the same
-# build_entry.sh remember.sh's promote runs.
-build_entry() { bash "$REPO_ROOT/build_entry.sh" "$1"; }
-
-fx() { echo "$REPO_ROOT/test/fixtures/$1"; }
-pane_of() { jq -r '.result.pane.pane_id' "$(fx "$1")/pane.json"; }
-
-# A writable copy of a fixture, for a test that changes one reply.
-copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$1"; }
 
 @test "pane split right: the sibling is the left pane, side after" {
   run build_entry "$(fx right-after)"
@@ -72,13 +63,11 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
   [ "$status" -eq 0 ]
   [ "$(jq -r '.kind' <<<"$output")" = shell ]
   [ "$(jq -c '.argv' <<<"$output")" = '["tail","-F","/home/user/proj/a"]' ]
-  [ "$(jq -c '.programs' <<<"$output")" = '["tail"]' ]
 }
 
 @test "a leader that is a shell (login dash, any path) gives argv null" {
   d=$(copy_fx command)
-  jq '.result.process_info.foreground_processes[0] |= (.argv = ["-bash"] | .argv0 = "-bash")' "$d/procs.json" > "$d/p.tmp"
-  mv "$d/p.tmp" "$d/procs.json"
+  edit_fx "$d/procs.json" '.result.process_info.foreground_processes[0] |= (.argv = ["-bash"] | .argv0 = "-bash")'
   run build_entry "$d"
   [ "$status" -eq 0 ]
   [ "$(jq -c '.argv' <<<"$output")" = null ]
@@ -102,21 +91,6 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
   [ "$(jq -r '.viewer_open' <<<"$output")" = /home/user/proj/sub/notes.md ]
 }
 
-@test "viewer_open prefers the file the viewer reports now (pane token file_viewer_open) over --open" {
-  d=$(copy_fx plugin-split)
-  jq '.result.pane.tokens = {"file_viewer_open": "docs/now.md"}' "$d/pane.json" > "$d/p" && mv "$d/p" "$d/pane.json"
-  run build_entry "$d"
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.viewer_open' <<<"$output")" = docs/now.md ]
-}
-
-@test "a file_viewer_open token on a pane that is not a viewer is ignored" {
-  d=$(copy_fx lone)
-  jq '.result.pane.tokens = {"file_viewer_open": "docs/now.md"}' "$d/pane.json" > "$d/p" && mv "$d/p" "$d/pane.json"
-  run build_entry "$d"
-  [ "$(jq -c '.viewer_open' <<<"$output")" = null ]
-}
-
 @test "viewer_open is null for a pane that is not a viewer" {
   run build_entry "$(fx lone)"
   [ "$(jq -c '.viewer_open' <<<"$output")" = null ]
@@ -132,8 +106,7 @@ copy_fx() { cp -R "$(fx "$1")" "$BATS_TEST_TMPDIR/$1"; echo "$BATS_TEST_TMPDIR/$
 
 @test "tab_label is null for herdr's auto label 'N · name'" {
   d=$(copy_fx lone)
-  jq '.result.tab.label = "2 · proj"' "$d/tab.json" > "$d/t.tmp"
-  mv "$d/t.tmp" "$d/tab.json"
+  edit_fx "$d/tab.json" '.result.tab.label = "2 · proj"'
   run build_entry "$d"
   [ "$status" -eq 0 ]
   [ "$(jq -c '.tab_label' <<<"$output")" = null ]

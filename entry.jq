@@ -1,6 +1,7 @@
 # Builds one flat entry (the snapshot contract reopen.sh reads) from the raw herdr replies
 # remember.sh saved. Run it through build_entry.sh <dir>, which holds the jq command.
 # Every field is present; absent data is null. `v` is the contract version.
+include "names";
 
 def first_or_null: if length > 0 then .[0] else null end;
 def inside($a; $b): $a.x >= $b.x and $a.y >= $b.y
@@ -11,34 +12,30 @@ def touches($a; $b; $d): if $d == "right"
 
 ($pane | first_or_null | .result.pane) as $p
 | ($layout | first_or_null | .result.layout) as $l
+| if $p == null or $l == null then error("pane and layout replies are required") else . end
 | ($procs | first_or_null | .result.process_info) as $pi
 | ($tab | first_or_null | .result.tab) as $t
-| ($ws | first_or_null | .result.workspace) as $w
+| ($workspace | first_or_null | .result.workspace) as $w
 | ($agent | first_or_null) as $a
 | ($plugin | first_or_null | .result.plugin_pane) as $pp
 | ($p.foreground_cwd // $p.cwd) as $cwd
 # The sibling: the other pane of the smallest split that held this pane, preferring one that
 # touched it along the split axis. side "after" = this pane was right of / below the sibling.
-| (if $l == null then null else
-    ($l.panes[] | select(.pane_id == $p.pane_id) | .rect) as $r
-    | ([$l.splits[]? | select(inside($r; .rect))] | sort_by(.rect.width * .rect.height) | first) as $s
-    | if $s == null then null else
-        ([$l.panes[] | select(.pane_id != $p.pane_id and inside(.rect; $s.rect))]
-          | sort_by([(if touches(.rect; $r; $s.direction) then 0 else 1 end), -(.rect.width * .rect.height)])
-          | first) as $o
-        | if $o == null then null else
-            { pane_id: $o.pane_id, direction: $s.direction,
-              side: (if ($s.direction == "right" and $r.x > $o.rect.x) or ($s.direction == "down" and $r.y > $o.rect.y)
-                     then "after" else "before" end) }
-          end
-      end
-  end) as $sib
-# Processes: the name (argv0 basename, login dash stripped; the same rule close.sh uses) of
-# everything in the foreground, and the argv of the command the shell launched (the process
-# group leader) when it is not the shell itself.
+| (($l.panes[] | select(.pane_id == $p.pane_id) | .rect) as $r
+  | ([$l.splits[]? | select(inside($r; .rect))] | sort_by(.rect.width * .rect.height) | first) as $s
+  | if $s == null then null else
+      ([$l.panes[] | select(.pane_id != $p.pane_id and inside(.rect; $s.rect))]
+        | sort_by([(if touches(.rect; $r; $s.direction) then 0 else 1 end), -(.rect.width * .rect.height)])
+        | first) as $o
+      | if $o == null then null else
+          { pane_id: $o.pane_id, direction: $s.direction,
+            side: (if ($s.direction == "right" and $r.x > $o.rect.x) or ($s.direction == "down" and $r.y > $o.rect.y)
+                   then "after" else "before" end) }
+        end
+    end) as $sib
+# The argv of the command the shell launched (the process group leader) when it is not the
+# shell itself.
 | ([$pi.foreground_processes[]? | select(.argv | type == "array" and length > 0)]) as $fg
-| def pname: (.argv0 // .argv[0] | split("/") | last | ltrimstr("-"));
-  ([$fg[] | pname]) as $names
 | ([$fg[] | select(.pid == $pi.foreground_process_group_id and .pid != $pi.shell_pid)] | first) as $leader
 | {
     v: 2,
@@ -58,8 +55,7 @@ def touches($a; $b; $d): if $d == "right"
       { id: $pp.plugin_id, entrypoint: $pp.entrypoint,
         placement: (if ($l.zoomed // false) and $l.focused_pane_id == $p.pane_id then "overlay" else "tiled" end) } end),
     kind: (if $pp != null then "plugin" elif ($a.session // null) != null then "agent" else "shell" end),
-    programs: $names,
-    argv: (if $leader != null and (($leader | pname) | test("^(zsh|bash|fish|sh|dash|login)$") | not) then $leader.argv else null end),
+    argv: (if $leader != null and (($leader | pname | is_shell) | not) then $leader.argv else null end),
     # The file a viewer pane shows now (herdr-file-viewer reports it as the pane token
     # file_viewer_open, root-relative), else the file it was launched with (--open on the
     # pane's own command, which a plugin pane runs as shell_pid).

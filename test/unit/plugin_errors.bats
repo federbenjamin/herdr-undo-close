@@ -1,39 +1,30 @@
 #!/usr/bin/env bats
-# What remember.sh and reopen.sh do with herdr's errors around plugin panes, against a fake herdr
-# at HERDR_BIN_PATH that answers by command (`plugin pane focus`, `pane get`): no server.
+# What remember.sh and reopen.sh do with herdr's errors around plugin panes, against the fake
+# herdr (test/helpers/fake-herdr.bash): no server.
 load ../helpers/common
+load ../helpers/fake-herdr
+load ../helpers/entry
 
 setup() {
   isolate
-  mkdir -p "$HOME/fake"
-  # shellcheck disable=SC2016  # the fake's script text, expanded when the fake runs
-  printf '%s\n' '#!/usr/bin/env bash' \
-    'd="$HOME/fake"; echo "$*" >> "$d/calls"' \
-    'k="$1_$2_$3"; [ -e "$d/$k.rc" ] || k="$1_$2"; [ -e "$d/$k.rc" ] || exit 1' \
-    'rc=$(cat "$d/$k.rc"); if [ "$rc" = 0 ]; then cat "$d/$k.out"; else cat "$d/$k.out" >&2; fi; exit "$rc"' \
-    > "$HOME/fake/herdr"
-  chmod +x "$HOME/fake/herdr"
-  export HERDR_BIN_PATH="$HOME/fake/herdr"
-  fx="$REPO_ROOT/test/fixtures/plugin-overlay"
-  pane=$(jq -r '.result.pane.pane_id' "$fx/pane.json")
+  fake_herdr
+  fx=$(fx plugin-overlay)
+  pane=$(pane_of plugin-overlay)
   reply pane_get 0 "$(cat "$fx/pane.json")"
+  reply pane_layout 0 "$(cat "$fx/layout.json")"
+  reply pane_process-info 0 "$(cat "$fx/procs.json")"
+  reply tab_get 0 "$(cat "$fx/tab.json")"
+  reply workspace_get 0 "$(cat "$fx/workspace.json")"
+  reply pane_read 0 ''
+  reply pane_rename 0 '{"result":{}}'
 }
 teardown() { unisolate; }
 
-# reply <command words joined by _> <exit code> <text>: what the fake herdr answers.
-reply() { printf '%s\n' "$3" > "$HOME/fake/$1.out"; echo "$2" > "$HOME/fake/$1.rc"; }
 staged() { echo "$HERDR_PLUGIN_STATE_DIR/staging/$pane"; }
 
-# stack_plugin <seq> <plugin id> [placement]: the plugin-overlay fixture's entry on the closed
-# stack, as <plugin id>, with <placement> (default overlay).
-stack_plugin() {
-  local e
-  e="$HERDR_PLUGIN_STATE_DIR/closed/$(printf '%010d' "$1")-$pane"
-  mkdir -p "$e"
-  bash "$REPO_ROOT/build_entry.sh" "$fx" \
-    | jq --arg id "$2" --arg pl "${3:-overlay}" '.plugin.id = $id | .plugin.placement = $pl' > "$e/entry.json"
-  : > "$e/scrollback.ansi"
-}
+# stack_plugin <plugin id> [placement]: the plugin-overlay fixture's entry pushed onto the stack,
+# as <plugin id>, with <placement> (default overlay).
+stack_plugin() { stack_entry "$fx" '.plugin.id = $id | .plugin.placement = $pl' --arg id "$1" --arg pl "${2:-overlay}"; }
 stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 
 @test "snapshot saves {} when herdr says no plugin owns the pane, and logs nothing" {
@@ -71,8 +62,8 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 }
 
 @test "a plugin that is gone drops its entry with herdr's reason, and the next reopen reaches the entry below" {
-  stack_plugin 1 other.tool
-  stack_plugin 2 acme.tool
+  stack_plugin other.tool
+  stack_plugin acme.tool
   reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 1 ]
@@ -83,12 +74,12 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
   reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w8:p9"}}}}'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 0 ]
-  [[ "$(grep '^plugin pane open' "$HOME/fake/calls" | tail -n 1)" == *"--plugin other.tool "* ]]
+  [[ "$(calls | grep '^plugin pane open' | tail -n 1)" == *"--plugin other.tool "* ]]
   [ -z "$(stack)" ]
 }
 
 @test "an entrypoint that is gone drops its entry with herdr's reason" {
-  stack_plugin 1 acme.tool
+  stack_plugin acme.tool
   reply plugin_pane_open 1 "{\"error\":{\"code\":\"plugin_pane_not_found\",\"message\":\"plugin pane entrypoint 'view' not found\"},\"id\":\"cli:plugin\"}"
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 1 ]
@@ -97,7 +88,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 }
 
 @test "any other open failure keeps the entry and names herdr's reason on every press" {
-  stack_plugin 1 acme.tool
+  stack_plugin acme.tool
   reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"no active workspace"},"id":"cli:plugin"}'
   for _ in 1 2; do
     run bash "$REPO_ROOT/reopen.sh"
@@ -109,7 +100,7 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 }
 
 @test "an open failure with no error code keeps the entry and says herdr gave none" {
-  stack_plugin 1 acme.tool
+  stack_plugin acme.tool
   reply plugin_pane_open 2 'invalid pane placement: overlay'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 1 ]
@@ -120,41 +111,70 @@ stack() { ls "$HERDR_PLUGIN_STATE_DIR/closed"; }
 # A tiled entry whose sibling, tab, and workspace are all gone: reopen makes a workspace to host it.
 gone_workspace() {
   reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+  reply pane_list 0 '{"result":{"panes":[]}}'
+  reply workspace_get 1 '{"error":{"code":"workspace_not_found","message":"workspace not found"},"id":"cli:workspace"}'
   reply workspace_create 0 '{"result":{"workspace":{"workspace_id":"w9"},"root_pane":{"pane_id":"w9:p1"}}}'
   reply workspace_close 0 '{"result":{}}'
 }
 
 @test "an open failure that keeps the entry closes the workspace reopen made for it, on every press" {
-  stack_plugin 1 acme.tool tiled
+  stack_plugin acme.tool tiled
   gone_workspace
   reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
   for n in 1 2; do
     run bash "$REPO_ROOT/reopen.sh"
     [ "$status" -eq 1 ]
     [[ "$output" == *"it is back on the stack."* ]]
-    [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq "$n" ]
-    [ "$(grep -c '^workspace close w9$' "$HOME/fake/calls")" -eq "$n" ]
+    [ "$(calls | grep -c '^workspace create')" -eq "$n" ]
+    [ "$(calls | grep -c '^workspace close w9$')" -eq "$n" ]
   done
 
   reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w9:p2"}}}}'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^workspace close' "$HOME/fake/calls")" -eq 2 ]
+  [ "$(calls | grep -c '^workspace close')" -eq 2 ]
 }
 
 @test "an open failure that drops the entry closes the workspace reopen made for it" {
-  stack_plugin 1 acme.tool tiled
+  stack_plugin acme.tool tiled
   gone_workspace
   reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"it is dropped from the stack."* ]]
-  [ "$(grep -c '^workspace close w9$' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(calls | grep -c '^workspace close w9$')" -eq 1 ]
+  [ "$(calls | grep -c 'close it by hand')" -eq 0 ]
   [ -z "$(stack)" ]
 }
 
+@test "an open failure that drops the entry, with a workspace reopen made and cannot close, reports that workspace" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is dropped from the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not close the workspace w9 that reopen made; close it by hand. --sound none'
+  [ -z "$(stack)" ]
+}
+
+@test "a workspace reopen made and can neither close nor name in the kept entry is reported" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
+  mkdir "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json.new"
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is back on the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not close the workspace w9 that reopen made; close it by hand. --sound none'
+  [ "$(stack)" = "0000000001-$pane" ]
+  [ "$(jq -r .workspace_id "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json")" != w9 ]
+}
+
 @test "a workspace reopen made and could not close hosts the next press, which makes none" {
-  stack_plugin 1 acme.tool tiled
+  stack_plugin acme.tool tiled
   gone_workspace
   reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
   reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
@@ -166,12 +186,139 @@ gone_workspace() {
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"it is back on the stack."* ]]
-  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
-  [ "$(grep -c '^plugin pane open .*--placement tab --workspace w9' "$HOME/fake/calls")" -eq 2 ]
+  [ "$(calls | grep -c '^workspace create')" -eq 1 ]
+  [ "$(calls | grep -c '^plugin pane open .*--placement tab --workspace w9')" -eq 2 ]
 
   reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w9:p2"}}}}'
   run bash "$REPO_ROOT/reopen.sh"
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^workspace create' "$HOME/fake/calls")" -eq 1 ]
+  [ "$(calls | grep -c '^workspace create')" -eq 1 ]
   [ -z "$(stack)" ]
+}
+
+@test "a temporary file reopen cannot make fails the reopen, closes the workspace it made, and keeps the entry" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack. --sound none'
+  [ "$(calls | grep -c '^workspace close w9$')" -eq 1 ]
+  [ "$(calls | grep -c '^plugin pane open')" -eq 0 ]
+  [ "$(stack)" = "0000000001-$pane" ]
+}
+
+@test "a temporary file reopen cannot make, with a workspace it made and cannot close, points the entry there" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(could not make a temporary file); it is back on the stack."* ]]
+  [ "$(jq -r .workspace_id "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json")" = w9 ]
+  [ "$(calls | grep -c 'close it by hand')" -eq 0 ]
+}
+
+@test "a temporary file reopen cannot make for an overlay fails the reopen and keeps the entry" {
+  stack_plugin acme.tool
+  run env TMPDIR="$HOME/no-tmp" bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not reopen the acme.tool pane (could not make a temporary file); it is back on the stack."* ]]
+  [ "$(calls | grep -c '^workspace')" -eq 0 ]
+  [ "$(stack)" = "0000000001-$pane" ]
+}
+
+@test "a workspace get that fails with another code places the pane as a tab and creates no workspace" {
+  stack_plugin acme.tool tiled
+  reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+  reply pane_list 0 '{"result":{"panes":[]}}'
+  reply workspace_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w8:p9"}}}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$(calls | grep -c '^plugin pane open .*--placement tab --workspace w8')" -eq 1 ]
+  [ "$(calls | grep -c '^workspace create')" -eq 0 ]
+  [ -z "$(stack)" ]
+}
+
+@test "a sibling that pane get fails on with another code still takes the split" {
+  stack_entry "$(fx plugin-split)"
+  reply pane_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:pane"}'
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w7:p9"}}}}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$(calls | grep -c '^plugin pane open .*--placement split --direction right --target-pane w7:p1')" -eq 1 ]
+  [ "$(calls | grep -c '^pane list')" -eq 0 ]
+}
+
+@test "promote does not push a pane that pane get fails on with another code" {
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  reply pane_get 1 '{"error":{"code":"internal_error","message":"busy"},"id":"cli:pane"}'
+  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  [ "$status" -eq 0 ]
+  [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/closed" 2>/dev/null)" ]
+  [ -f "$(staged)/pane.json" ]
+}
+
+@test "promote says so and fails when the entry cannot be put on the stack" {
+  reply plugin_pane_focus 0 "$(cat "$fx/plugin.json")"
+  bash "$REPO_ROOT/remember.sh" snapshot "$pane"
+  reply pane_get 1 '{"error":{"code":"pane_not_found","message":"pane not found"},"id":"cli:pane"}'
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR/closed"
+  chmod 500 "$HERDR_PLUGIN_STATE_DIR/closed"
+  run bash "$REPO_ROOT/remember.sh" promote "$pane"
+  chmod 700 "$HERDR_PLUGIN_STATE_DIR/closed"
+  [ "$status" -eq 1 ]
+  [ "${lines[${#lines[@]}-1]}" = "Could not remember the closed pane $pane; it cannot be reopened." ]
+  calls | grep -qx "notification show Close --body Could not remember the closed pane $pane; it cannot be reopened. --sound none"
+  [ -z "$(stack)" ]
+}
+
+# noisy_open <stdout|stderr> <line>: herdr also prints <line> on that stream at every plugin pane
+# open, beside its reply.
+noisy_open() {
+  local fd=1
+  [ "$1" = stdout ] || fd=2
+  printf '%s\n' "$2" > "$HOME/fake/noise"
+  printf '#!/usr/bin/env bash\ncase "$*" in "plugin pane open "*) cat "$HOME/fake/noise" >&%s ;; esac\nexec "$HOME/fake/herdr" "$@"\n' "$fd" > "$HOME/fake/noisy"
+  chmod +x "$HOME/fake/noisy"
+  export HERDR_BIN_PATH="$HOME/fake/noisy"
+}
+
+@test "a warning on stderr beside a successful open still reopens the pane" {
+  stack_plugin acme.tool
+  reply plugin_pane_open 0 '{"result":{"plugin_pane":{"pane":{"pane_id":"w8:p9"}}}}'
+  noisy_open stderr 'warning: a newer herdr is available'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$(stack)" ]
+  [ -z "$(ls "$HERDR_PLUGIN_STATE_DIR/reopening")" ]
+}
+
+@test "text on stdout beside a failed open does not hide herdr's error code" {
+  stack_plugin acme.tool
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  noisy_open stdout 'opening acme.tool'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(plugin_not_found: plugin not found); it is dropped from the stack."* ]]
+  [ -z "$(stack)" ]
+}
+
+@test "an empty stack is nothing to reopen" {
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Nothing to reopen." ]
+}
+
+@test "a newest entry that cannot be taken off the stack fails the reopen and stays on top" {
+  stack_plugin acme.tool
+  mkdir -p "$HERDR_PLUGIN_STATE_DIR/reopening/$(stack)/left-over"
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not take the last closed pane off the stack; it is still there."* ]]
+  [[ "$output" != *"Nothing to reopen"* ]]
+  [ "$(stack)" = "0000000001-$pane" ]
+  [ "$(calls | grep -c '^plugin pane open')" -eq 0 ]
 }

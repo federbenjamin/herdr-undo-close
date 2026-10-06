@@ -7,16 +7,17 @@ set -u
 entry=${1:?usage: reopen_entry.sh <entry dir>}
 [ -d "$entry" ] || exit 0
 
+dim() { printf '\033[2m%s\033[0m\n' "$1"; }
+note() { dim "undo-close: $1"; }
+
 if [ -s "$entry/scrollback.ansi" ]; then
   cat "$entry/scrollback.ansi"
-  printf '\n\033[2m── reopened by undo-close ──\033[0m\n'
+  printf '\n'; dim '── reopened by undo-close ──'
 fi
 agent="" session="" claude_bin="" claude_resume_args=""
 # shellcheck disable=SC1091
 [ -f "$entry/launch" ] && . "$entry/launch"
 rm -rf "$entry"
-
-note() { printf '\033[2mundo-close: %s\033[0m\n' "$1"; }
 
 case "$agent" in
   "") ;;
