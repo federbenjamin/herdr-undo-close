@@ -42,7 +42,7 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck -x scripts/check-deps.sh
-          shellcheck -x -s bash ./*.sh internal/*.sh test/helpers/herdr-guard test/helpers/*.bash test/live/*.bash test/fixtures/*.sh docs/media/hero.sh
+          shellcheck -x -s bash ./*.sh internal/*.sh scripts/install.sh test/helpers/herdr-guard test/helpers/*.bash test/live/*.bash test/fixtures/*.sh docs/media/hero.sh
 
       # Each check runs even when an earlier one failed, so one red step never hides another.
       - name: Unit tests
