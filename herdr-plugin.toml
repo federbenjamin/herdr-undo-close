@@ -2,7 +2,7 @@ id = "herdr-undo-close"
 name = "Undo Close"
 version = "0.2.1"
 min_herdr_version = "0.9.0"
-description = "Undo close for Herdr panes: ctrl+d closes a pane and remembers it, prefix+u reopens it in its old spot with scrollback"
+description = "Reopen the pane you just closed in Herdr: same split, same scrollback, Claude Code conversation included"
 platforms = ["macos", "linux"]
 
 # Nothing to build; fails the install with a clear message when jq is missing.
