@@ -9,7 +9,7 @@
   <a href="https://github.com/herdrdev/herdr"><img src="https://img.shields.io/badge/herdr-%E2%89%A5%200.9.0-blue" alt="herdr ≥ 0.9.0"></a>
 </p>
 
-<p align="center"><img src="docs/media/hero.png" alt="A Herdr split whose right pane was closed while it ran tail -f app.log and reopened: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt" width="720"></p>
+<p align="center"><img src="docs/media/hero.gif" alt="A Herdr pane running tail -f app.log is closed with ctrl+d and brought back with prefix+u: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt" width="720"><br><sub>Close with <code>ctrl+d</code>, reopen with <code>prefix+u</code>. Recorded live by <a href="docs/media/hero.sh">hero.sh</a>, no cuts.</sub></p>
 
 A plugin for [Herdr](https://herdr.dev), the terminal multiplexer for running coding agents side
 by side. It is undo for a closed pane, like reopening a closed browser tab: close a pane with
@@ -17,21 +17,6 @@ by side. It is undo for a closed pane, like reopening a closed browser tab: clos
 and the pane is back in the same split with its old output above a fresh prompt. A Claude Code
 pane resumes its conversation. A command that was running comes back typed at the prompt, never
 run.
-
-## Features
-
-- **Close as you always have, remembered first.** `ctrl+d` still reaches a shell, a REPL or
-  Claude Code, which exit as usual. A pane that would ignore the key, such as a file viewer or
-  lazygit, is closed by Herdr. Either way the pane is saved before it goes.
-- **`prefix+u` puts it back where it was.** Same split, same side, its old output above a fresh
-  prompt. Press it again for the pane closed before that.
-- **A Claude Code pane picks up its conversation.** It reopens with `claude --resume` into the
-  same session.
-- **Your last command comes back typed, not run.** A pane that ran `tail -f app.log` reopens with
-  its output and that command waiting at the prompt. Nothing re-executes.
-- **Tabs, workspaces and plugin panes too.** Close the last pane of a tab or workspace and
-  `prefix+u` brings the tab or workspace back; a plugin pane such as the file viewer reopens as
-  the same plugin pane.
 
 ## Install
 
@@ -63,6 +48,21 @@ Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` fir
 
 Not working? Read `herdr plugin log list --plugin herdr-undo-close`, then
 [open an issue](https://github.com/federbenjamin/herdr-undo-close/issues).
+
+## Features
+
+- **Close as you always have, remembered first.** `ctrl+d` still reaches a shell, a REPL or
+  Claude Code, which exit as usual. A pane that would ignore the key, such as a file viewer or
+  lazygit, is closed by Herdr. Either way the pane is saved before it goes.
+- **`prefix+u` puts it back where it was.** Same split, same side, its old output above a fresh
+  prompt. Press it again for the pane closed before that.
+- **A Claude Code pane picks up its conversation.** It reopens with `claude --resume` into the
+  same session.
+- **Your last command comes back typed, not run.** A pane that ran `tail -f app.log` reopens with
+  its output and that command waiting at the prompt. Nothing re-executes.
+- **Tabs, workspaces and plugin panes too.** Close the last pane of a tab or workspace and
+  `prefix+u` brings the tab or workspace back; a plugin pane such as the file viewer reopens as
+  the same plugin pane.
 
 ## Usage
 
