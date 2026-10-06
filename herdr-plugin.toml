@@ -5,10 +5,11 @@ min_herdr_version = "0.9.0"
 description = "Reopen the pane you just closed in Herdr: same split, same scrollback, Claude Code conversation included"
 platforms = ["macos", "linux"]
 
-# Nothing to build; fails the install with a clear message when jq is missing.
+# Nothing to compile. The install step checks for jq, then runs setup-keys and setup-shell,
+# so one `herdr plugin install` is the whole install (see scripts/install.sh).
 [[build]]
 platforms = ["macos", "linux"]
-command = ["/bin/sh", "scripts/check-deps.sh"]
+command = ["bash", "scripts/install.sh"]
 
 [[actions]]
 id = "close"
@@ -25,6 +26,7 @@ contexts = ["pane", "workspace", "global"]
 command = ["bash", "reopen.sh"]
 
 # Plugins cannot ship keys or shell lines; these actions write them as marker-fenced blocks.
+# The install runs both; they stay as actions for a re-run or a skipped key.
 [[actions]]
 id = "setup-keys"
 title = "undo-close: install the default keys"

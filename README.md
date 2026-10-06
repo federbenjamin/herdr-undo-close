@@ -20,31 +20,29 @@ run.
 
 ## Install
 
-You need Herdr 0.9+ and `jq`, on macOS or Linux. `python3` is optional; it is used to dismiss a
-popup.
+You need Herdr 0.9+ and `jq`, on macOS or Linux.
 
 ```sh
 herdr plugin install federbenjamin/herdr-undo-close
-herdr plugin action invoke setup-keys --plugin herdr-undo-close    # ctrl+d closes, prefix+u reopens
-herdr plugin action invoke setup-shell --plugin herdr-undo-close   # replays a reopened pane's scrollback
-herdr integration install claude                                   # optional: lets a Claude Code pane resume
 ```
 
-Each `invoke` prints only that it started; the result arrives as a Herdr notification and in
-`herdr plugin log list --plugin herdr-undo-close`. Then try it: open a new pane, run `echo hi`,
-press `ctrl+d`, then `prefix+u`. The pane comes back with `hi` above a fresh prompt.
+That is the whole install. After you confirm Herdr's preview, it binds `ctrl+d` and `prefix+u`
+in your Herdr config and adds a few lines to the end of the file your pane shell reads at start
+(`~/.bash_profile` or `~/.zprofile` on macOS, `~/.bashrc` or `~/.zshrc` on Linux); a reopened
+pane needs them to replay its scrollback before the first prompt. Each is one marked block, the
+original file is backed up first, and `remove-keys` / `remove-shell` take them out again. A key
+you already use is left alone and the install says so; bind `herdr-undo-close.close` and
+`herdr-undo-close.reopen` yourself instead. Panes opened after the install have the hook; panes
+already open do not.
 
-What the two setup actions do: `setup-keys` binds `ctrl+d` and `prefix+u` in your Herdr config.
-A key you already use is left alone and the notification says so; bind `herdr-undo-close.close`
-and `herdr-undo-close.reopen` yourself instead. `setup-shell` adds a few lines to the end of the
-file your pane shell reads at start (`~/.bash_profile` or `~/.zprofile` on macOS, `~/.bashrc`
-or `~/.zshrc` on Linux); a reopened pane needs them to replay its scrollback before the first
-prompt. Panes opened after it pick the lines up; panes already open do not. Both actions write
-one marked block, keep a backup of the original file, and have a `remove-keys` /
-`remove-shell` twin.
+Then try it: open a new pane, run `echo hi`, press `ctrl+d`, then `prefix+u`. The pane comes
+back with `hi` above a fresh prompt.
 
-Updating is reinstalling. Uninstalling: run `remove-keys` and `remove-shell` first, then
-`herdr plugin uninstall herdr-undo-close`.
+For a Claude Code pane to resume its conversation, Herdr must know the session: `herdr
+integration install claude` once, if you have not already.
+
+Updating is reinstalling. Uninstalling: `herdr plugin action invoke remove-keys --plugin
+herdr-undo-close`, the same with `remove-shell`, then `herdr plugin uninstall herdr-undo-close`.
 
 Not working? Read `herdr plugin log list --plugin herdr-undo-close`, then
 [open an issue](https://github.com/federbenjamin/herdr-undo-close/issues).
@@ -116,7 +114,7 @@ Prefer your own keys? Skip `setup-keys` and bind `herdr-undo-close.close` and
   for by a script would move every attached Herdr window.
 - The typed-back command is never run for you, and is not typed at all if it contains a
   control character.
-- Closing a popup needs `python3`; without it the key goes to the pane under the popup.
+- Closing a popup needs `python3` (optional); without it the key goes to the pane under the popup.
 - A plugin pane is recognised through Herdr's `plugin pane focus`, which names its plugin and
   entrypoint; it reopens through `plugin pane open`. A
   [herdr-file-viewer](https://github.com/smarzban/herdr-file-viewer) pane keeps its file: the
