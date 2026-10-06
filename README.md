@@ -9,7 +9,7 @@
   <a href="https://github.com/herdrdev/herdr"><img src="https://img.shields.io/badge/herdr-%E2%89%A5%200.9.0-blue" alt="herdr ≥ 0.9.0"></a>
 </p>
 
-<p align="center"><img src="docs/media/hero.gif" alt="A Herdr pane running tail -f app.log is closed with ctrl+d and brought back with prefix+u: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt" width="720"><br><sub>Close with <code>ctrl+d</code>, reopen with <code>prefix+u</code>. Recorded live by <a href="docs/media/hero.sh">hero.sh</a>, no cuts.</sub></p>
+<p align="center"><img src="docs/media/hero.gif" alt="A Herdr pane running tail -f app.log is closed with ctrl+d and brought back with prefix+u: its old log lines, a reopened-by-undo-close line, then tail -f app.log typed at a fresh prompt. Then the Claude Code pane beside it is closed with ctrl+d and brought back with prefix+u as claude --resume, its earlier exchange on screen" width="720"><br><sub>Close with <code>ctrl+d</code>, reopen with <code>prefix+u</code>: a <code>tail -f</code> pane, then a Claude Code pane back in its conversation. Recorded live by <a href="docs/media/hero.sh">hero.sh</a>, no cuts.</sub></p>
 
 A plugin for [Herdr](https://herdr.dev), the terminal multiplexer for running coding agents side
 by side. It is undo for a closed pane, like reopening a closed browser tab: close a pane with
