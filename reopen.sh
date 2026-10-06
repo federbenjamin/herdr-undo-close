@@ -20,13 +20,14 @@
 
 entry="" new="" made_ws=""
 # On any exit with no pane opened: a workspace this run made is closed, or, when it cannot be, the
-# entry now names it so the next press opens there, making none; then the entry goes back.
+# entry now names it so the next press opens there, making none; one neither closed nor named (the
+# entry was dropped, or cannot be rewritten) is reported. Then the entry goes back.
 restore() {
   [ -z "$new" ] || return 0
-  if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1 && [ -d "$entry" ]; then
-    if jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new"; then
-      mv "$entry/entry.json.new" "$entry/entry.json" || true
-    fi
+  if [ -n "$made_ws" ] && ! "$herdr" workspace close "$made_ws" >/dev/null 2>&1 \
+    && ! { [ -d "$entry" ] && jq --arg w "$made_ws" '.workspace_id = $w' "$entry/entry.json" > "$entry/entry.json.new" \
+      && mv "$entry/entry.json.new" "$entry/entry.json"; }; then
+    notify "Reopen" "Could not close the workspace $made_ws that reopen made; close it by hand." >&2
   fi
   if [ -n "$entry" ] && [ -d "$entry" ]; then stack_restore "$entry" 2>/dev/null || true; fi
 }

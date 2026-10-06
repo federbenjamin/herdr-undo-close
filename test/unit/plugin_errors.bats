@@ -143,7 +143,34 @@ gone_workspace() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"it is dropped from the stack."* ]]
   [ "$(calls | grep -c '^workspace close w9$')" -eq 1 ]
+  [ "$(calls | grep -c 'close it by hand')" -eq 0 ]
   [ -z "$(stack)" ]
+}
+
+@test "an open failure that drops the entry, with a workspace reopen made and cannot close, reports that workspace" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_not_found","message":"plugin not found"},"id":"cli:plugin"}'
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is dropped from the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not close the workspace w9 that reopen made; close it by hand. --sound none'
+  [ -z "$(stack)" ]
+}
+
+@test "a workspace reopen made and can neither close nor name in the kept entry is reported" {
+  stack_plugin acme.tool tiled
+  gone_workspace
+  reply workspace_close 1 '{"error":{"code":"internal","message":"busy"},"id":"cli:workspace"}'
+  reply plugin_pane_open 1 '{"error":{"code":"plugin_pane_open_failed","message":"busy"},"id":"cli:plugin"}'
+  mkdir "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json.new"
+  run bash "$REPO_ROOT/reopen.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"it is back on the stack."* ]]
+  calls | grep -qx 'notification show Reopen --body Could not close the workspace w9 that reopen made; close it by hand. --sound none'
+  [ "$(stack)" = "0000000001-$pane" ]
+  [ "$(jq -r .workspace_id "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json")" != w9 ]
 }
 
 @test "a workspace reopen made and could not close hosts the next press, which makes none" {
@@ -189,6 +216,7 @@ gone_workspace() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"(could not make a temporary file); it is back on the stack."* ]]
   [ "$(jq -r .workspace_id "$HERDR_PLUGIN_STATE_DIR/closed/0000000001-$pane/entry.json")" = w9 ]
+  [ "$(calls | grep -c 'close it by hand')" -eq 0 ]
 }
 
 @test "a temporary file reopen cannot make for an overlay fails the reopen and keeps the entry" {
