@@ -6,7 +6,7 @@ umask 077   # everything the plugin writes (snapshots hold scrollback) is owner-
 
 herdr="${HERDR_BIN_PATH:-herdr}"
 plugin="${HERDR_PLUGIN_ID:-herdr-undo-close}"
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC2034  # state is read by the scripts that source this file
 state="${HERDR_PLUGIN_STATE_DIR:-}"
 

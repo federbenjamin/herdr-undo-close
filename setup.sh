@@ -11,7 +11,7 @@
 # Rules: never touch anything outside the block; leave a key that is already bound elsewhere
 # alone and say so; keep the first backup of a file for good; pass a new config through
 # `herdr config check` before it replaces the old one; write through a symlinked file.
-. "$(cd "$(dirname "$0")" && pwd)/lib.sh"
+. "$(cd "$(dirname "$0")" && pwd)/internal/lib.sh"
 
 # key | action id | description
 bindings=(
@@ -52,7 +52,7 @@ profile_path() {
 }
 
 # The hook as it is written: shell-hook.sh without its comment lines.
-hook_lines() { grep -v '^#' "$here/shell-hook.sh"; }
+hook_lines() { grep -v '^#' "$here/internal/shell-hook.sh"; }
 
 # The file without the block fenced by $1 and $2. A begin marker with no end marker is refused
 # (deleting to EOF would eat the user's file). Runs in $(…), so call it as

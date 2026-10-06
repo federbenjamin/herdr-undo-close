@@ -9,9 +9,10 @@
 #                                 the pane to be gone, then pushes entry.json (entry.jq: the flat
 #                                 contract reopen.sh reads) and scrollback.ansi onto the stack.
 #                                 A push that fails is a notification: nothing reads its output.
+# shellcheck source=internal/lib.sh
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
-# shellcheck source=stack.sh
-. "$here/stack.sh"
+# shellcheck source=internal/stack.sh
+. "$here/internal/stack.sh"
 [ -n "$state" ] || exit 0
 
 cmd=${1:?usage: remember.sh snapshot|promote <pane>}
@@ -58,7 +59,7 @@ case "$cmd" in
     for _ in 1 2 3 4 5 6 7 8 9 10; do
       sleep 0.2
       gone pane "$pane" || continue
-      if ! bash "$here/build_entry.sh" "$dir" > "$dir/entry.json" 2>/dev/null; then
+      if ! bash "$here/internal/build_entry.sh" "$dir" > "$dir/entry.json" 2>/dev/null; then
         rm -rf "$dir"; exit 0
       fi
       stack_push "$pane" || fail "Close" "Could not remember the closed pane $pane; it cannot be reopened."

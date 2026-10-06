@@ -13,7 +13,7 @@ wait_leader() {
   poll 50 0.1 leads "$1" "$2" || { echo "wait_leader: $2 never led $1" >&2; return 1; }
 }
 leads() {
-  fg_procs "$1" | jq -L "$REPO_ROOT" -e --arg n "$2" 'include "names"; .result.process_info
+  fg_procs "$1" | jq -L "$REPO_ROOT/internal" -e --arg n "$2" 'include "names"; .result.process_info
     | .foreground_process_group_id as $g | any(.foreground_processes[]?; .pid == $g and pname == $n)'
 }
 
