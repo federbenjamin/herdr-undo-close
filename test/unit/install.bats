@@ -33,3 +33,17 @@ count() { grep -c -- "$1" "$2" || true; }
   [ "$(cat "$config")" = "$before" ]
   [ "$(count '^# >>> herdr-undo-close shell hook' "$HOME/.bash_profile")" -eq 1 ]
 }
+
+@test "install writes the report to install.log, owner-only, naming the key left alone" {
+  printf '[[keys.command]]\nkey = "ctrl+d"\ncommand = "mine"\n' >> "$config"
+  log=$HOME/.local/state/herdr-undo-close/install.log
+  mkdir -p "$(dirname "$log")"
+  ln -s "$HOME/elsewhere" "$log"
+  run bash "$REPO_ROOT/scripts/install.sh"
+  [ "$status" -eq 0 ]
+  [ ! -L "$log" ] && [ ! -e "$HOME/elsewhere" ]
+  [ "$(stat -c %a "$log" 2>/dev/null || stat -f %Lp "$log")" = 600 ]
+  grep -q 'Bound prefix+u' "$log"
+  grep -q 'Left ctrl+d alone' "$log"
+  grep -q 'Wrote the shell hook' "$log"
+}

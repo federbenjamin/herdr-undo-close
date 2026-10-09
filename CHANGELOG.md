@@ -5,6 +5,9 @@
 - `herdr plugin install` is the whole install: its build step runs `setup-keys` and `setup-shell`, so
   the keys and the replay hook are in place without a second command. Both remain actions for a
   re-run or a key that was left alone.
+- The install writes its report (keys bound, keys left alone) to
+  `~/.local/state/herdr-undo-close/install.log` as well as a toast, so it reaches you with no
+  Herdr client attached.
 - The scripts herdr does not call itself moved into `internal/`; the root keeps `close.sh`, `reopen.sh` and `setup.sh`. No change in behaviour.
 - `ctrl+d` always closes a plugin pane, even when the program in it would take the key itself
   (a shell, an agent). The decision now reads the snapshot taken for the close, so each `ctrl+d`

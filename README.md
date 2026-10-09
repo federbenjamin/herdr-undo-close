@@ -31,7 +31,8 @@ in your Herdr config and adds a few lines to the end of the file your pane shell
 (`~/.bash_profile` or `~/.zprofile` on macOS, `~/.bashrc` or `~/.zshrc` on Linux); a reopened
 pane needs them to replay its scrollback before the first prompt. Each is one marked block, the
 original file is backed up first, and `remove-keys` / `remove-shell` take them out again. A key
-you already use is left alone and the install says so; bind `herdr-undo-close.close` and
+you already use is left alone and the install says so, in a toast and in a log you read with
+`cat ~/.local/state/herdr-undo-close/install.log`. Bind `herdr-undo-close.close` and
 `herdr-undo-close.reopen` yourself instead. Panes opened after the install have the hook; panes
 already open do not.
 
