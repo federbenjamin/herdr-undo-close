@@ -8,9 +8,13 @@ bats test/unit   # entry.jq, close.sh, remember.sh, reopen.sh, reopen_entry.sh, 
 bats test/live   # close.sh and reopen.sh against a real headless Herdr, one server per file
 ```
 
+Nothing in your shell changes a result: each unit test, and each live file (its tests share one
+server), starts from a clean environment that keeps only `PATH`, `CI` and the test's own
+variables, with the locale pinned to `C.UTF-8`, and with every alias and every shell function
+you exported (or that your `BASH_ENV` defined) dropped.
+
 The tests never touch your own Herdr, even when run from inside a Herdr pane. Each unit test,
-and each live file (its tests share one server), gets a temporary HOME under `/tmp`, with every
-`HERDR_*` and `XDG_*` variable removed, and every Herdr call, the plugin's included, goes
+and each live file, gets a temporary HOME under `/tmp`, and every Herdr call, the plugin's included, goes
 through `test/helpers/herdr-guard`, which refuses any call that could reach a server outside
 that HOME. A refused call fails the unit test that made it, or, in a live file, the file's
 teardown. The one call that skips Herdr, `close.sh`'s popup check, needs `HERDR_SOCKET_PATH`,
