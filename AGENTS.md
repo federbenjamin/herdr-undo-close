@@ -1,5 +1,7 @@
 # herdr-undo-close
 
+herdr-undo-close is a public plugin for Herdr, the terminal multiplexer for running coding agents side by side, written as shell scripts. It is undo for a closed pane: `ctrl+d` closes one and `prefix+u` brings it back in the same split with its old output above a fresh prompt, and a Claude Code pane resumes its conversation. It is for Herdr users on macOS or Linux, installed with `herdr plugin install federbenjamin/herdr-undo-close`.
+
 ## Project state
 
 - 2026-10-04: launched — v0.2.1 is released and public, so other people may have it installed. Retires if the repo is archived.
